@@ -6,7 +6,7 @@ wide: true
 
 {%- assign days = site.posts | group_by_exp: "p", "p.date | date: '%Y-%m-%d'" -%}
 {%- for day in days %}
-{%- assign entries = day.items | reverse -%}
+{%- assign entries = day.items -%}
 <section class="day">
   <h2><span>Day {% include day.html post=entries.first %}</span> {{ entries.first.date | date: "%A %-d %B %Y" }}</h2>
   <ul class="grid">
