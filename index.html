@@ -1,0 +1,20 @@
+---
+title: Journal
+---
+<p class="intro">{{ site.description }}</p>
+
+{%- assign months = site.posts | group_by_exp: "p", "p.date | date: '%B %Y'" -%}
+{%- for month in months %}
+<section class="month">
+  <h2>{{ month.name }}</h2>
+  <ul class="entries">
+    {%- for post in month.items %}
+    <li>
+      <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%d" }}</time>
+      <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+      {%- if post.verdict %}<span class="verdict">{{ post.verdict }}</span>{% endif %}
+    </li>
+    {%- endfor %}
+  </ul>
+</section>
+{%- endfor %}

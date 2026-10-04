@@ -1,0 +1,29 @@
+title: Journal
+description: A daily log of small AI experiments — a new way of responding to the world.
+author: shoreless
+url: "https://shoreless.github.io"
+baseurl: "/journal"
+
+permalink: /:year/:month/:day/:title/
+timezone: UTC
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+defaults:
+  - scope: { path: "", type: posts }
+    values: { layout: post }
+  - scope: { path: "" }
+    values: { layout: default }
+
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - scripts/
+  - vendor/

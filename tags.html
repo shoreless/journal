@@ -1,0 +1,18 @@
+---
+title: Tags
+permalink: /tags/
+---
+<h1>Tags</h1>
+{%- assign tags = site.tags | sort -%}
+{%- for tag in tags %}
+<section class="month" id="{{ tag[0] | slugify }}">
+  <h2>#{{ tag[0] }}</h2>
+  <ul class="entries">
+    {%- for post in tag[1] %}
+    <li><time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y-%m-%d" }}</time> <a href="{{ post.url | relative_url }}">{{ post.title }}</a></li>
+    {%- endfor %}
+  </ul>
+</section>
+{%- else %}
+<p>No tags yet.</p>
+{%- endfor %}
