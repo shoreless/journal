@@ -20,7 +20,9 @@ scripts/thumb.sh _posts/2026-10-04-abyss.md
 ```
 
 `add-entry.sh` copies the work into `works/<date>-<slug>/` untouched and creates
-`_posts/<date>-<slug>.md`. Commit and push to `main`; GitHub Pages rebuilds the site.
+`_posts/<date>-<slug>.md`. If the zip is a whole project with the site in a build folder
+(e.g. `dist/`), the rest of the project — source, README, tests — is kept in
+`works/<date>-<slug>/source/` (minus `node_modules`). Commit and push to `main`; GitHub Pages rebuilds the site.
 Set `DATE=2026-10-01` to file an entry under an earlier day.
 
 ### Entry front matter

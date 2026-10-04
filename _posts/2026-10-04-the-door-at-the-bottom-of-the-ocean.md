@@ -13,4 +13,6 @@ Press **Descend**. Swim down through the water column to the floor (look down an
 forward, or Q). A faint trail of light leads somewhere. Knock.
 
 Astra's build notes, covering how the idea developed and the full controls:
-[README]({{ '/works/2026-10-04-the-door-at-the-bottom-of-the-ocean/README.md' | relative_url }})
+[README](https://github.com/shoreless/journal/blob/main/works/2026-10-04-the-door-at-the-bottom-of-the-ocean/source/README.md).
+The [source](https://github.com/shoreless/journal/tree/main/works/2026-10-04-the-door-at-the-bottom-of-the-ocean/source)
+is kept alongside: its tests pass and it rebuilds byte-for-byte into what's running here.

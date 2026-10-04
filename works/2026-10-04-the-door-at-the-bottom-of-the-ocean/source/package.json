@@ -1,0 +1,20 @@
+{
+  "name": "abyss",
+  "version": "1.0.0",
+  "description": "Deep-sea magical realism in Three.js",
+  "main": "index.js",
+  "scripts": {
+    "check": "node --check dist/app.js",
+    "start": "python3 -m http.server 4173 --directory dist",
+    "build": "esbuild scene.js --bundle --minify --format=esm --outfile=dist/app.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "three": "0.180.0"
+  }
+}

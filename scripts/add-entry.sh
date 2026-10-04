@@ -5,6 +5,8 @@
 #
 # source (optional) can be a folder or .zip containing an index.html (a built site),
 # or any single file (an .html page, image, video, PDF…). It's copied to works/<date>-<slug>/.
+# If the index.html sits inside a bigger project (e.g. project/dist/), the rest of the project
+# is kept in works/<date>-<slug>/source/.
 # Leave it out for a words-only entry. Anything written in the post body becomes the
 # entry's notes (behind the Notes button) or, for words-only entries, the entry itself. Set DATE=YYYY-MM-DD to file it under another day.
 set -euo pipefail
@@ -33,8 +35,20 @@ if [[ -n "$src" ]]; then
     # Use the shallowest folder holding an index.html (e.g. a build's dist/).
     root=$(find "$src" -name index.html -not -path '*/node_modules/*' | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2-)
     [[ -z "$root" ]] && { echo "No index.html found in $3" >&2; rm -rf "$dest"; exit 1; }
-    cp -R "$(dirname "$root")/." "$dest/"
+    site="$(dirname "$root")"
+    cp -R "$site/." "$dest/"
     src_line="src: /${dest}/"
+    # If the site was a build inside a bigger project (e.g. project/dist/), keep the rest of
+    # the project (source, README, tests) in source/, minus installed dependencies.
+    top="$src"
+    while [[ $(find "$top" -mindepth 1 -maxdepth 1 | wc -l) -eq 1 && -d $(find "$top" -mindepth 1 -maxdepth 1) ]]; do
+      top=$(find "$top" -mindepth 1 -maxdepth 1)
+    done
+    if [[ "$(cd "$site" && pwd)" != "$(cd "$top" && pwd)" ]]; then
+      rel="${site#"$top"/}"
+      mkdir -p "$dest/source"
+      (cd "$top" && tar cf - --exclude="./$rel" --exclude=node_modules --exclude=.git .) | (cd "$dest/source" && tar xf -)
+    fi
   elif [[ "$src" == *.html || "$src" == *.htm ]]; then
     cp "$src" "$dest/index.html"
     src_line="src: /${dest}/"
