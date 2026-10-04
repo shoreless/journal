@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%2305202b%27/%3E%3Cpath d=%27M5 25L16 6l11 19M10 25l6-11 6 11%27 fill=%27none%27 stroke=%27%2390b8b3%27 stroke-width=%272%27/%3E%3C/svg%3E"><meta name="theme-color" content="#031820"><meta name="description" content="Meet the giant squid in an interactive Three.js deep-sea encounter.">
+  <title>ABYSS — A Giant Squid Encounter</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
+</head>
+<body>
+  <main id="ocean" aria-label="Interactive 3D giant squid. Drag to orbit and scroll to zoom."></main>
+  <div class="vignette"></div>
+  <button id="sub-toggle" aria-pressed="false">◎ Board submersible</button>
+  <section id="sub-cockpit" hidden aria-label="Submersible cockpit">
+    <div class="pressure-window" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="sub-heading"><span>ABYSS / MANNED SUB 01</span><h2>Into their world.</h2><small id="sub-format">PILOTED EXPEDITION</small></div>
+    <div class="sub-reticle" aria-hidden="true"><span>+</span></div>
+    <div class="sub-telemetry"><span>DEPTH <strong id="sub-depth">850 M</strong></span><span id="sub-range">CONTACT ACQUIRED</span><span id="sub-heading">HDG 000°</span></div>
+    <div class="sub-console">
+      <div class="sub-destinations" aria-label="Squid observation positions"><span>OBSERVE</span><button data-sub-focus="whole">Whole squid</button><button data-sub-focus="eye">Eye</button><button data-sub-focus="mantle">Mantle</button><button data-sub-focus="arms">Arms</button></div>
+      <div class="sub-flight" aria-label="Submersible thrusters">
+        <div class="sub-dpad"><button data-flight="up" aria-label="Rise">↑</button><button data-flight="left" aria-label="Move left">←</button><span aria-hidden="true">✛</span><button data-flight="right" aria-label="Move right">→</button><button data-flight="down" aria-label="Descend">↓</button></div>
+        <div class="sub-instructions"><span class="sonar" aria-hidden="true"></span><p id="sub-help">Drag to look · hold controls to pilot</p><small>THREE TAPS ON THE SQUID STILL MAKE MAGIC</small></div>
+        <div class="sub-thrust"><button data-flight="forward">＋<span>Approach</span></button><button data-flight="back">−<span>Back away</span></button></div>
+      </div>
+    </div>
+  </section>
+  <div id="transition-veil" aria-hidden="true"></div>
+  <header><a class="brand" href="./" aria-label="Abyss home"><svg viewBox="0 0 32 32" fill="none"><path d="M4 22 16 5l12 17M8 22l8-11 8 11M12 22l4-6 4 6M4 27h24" stroke="currentColor" stroke-width="1.3"/></svg>ABYSS<span>DEEP SEA OBSERVATORY</span></a><button id="about" class="text-button">Field notes <svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12"><path d="M3 13L13 3M4 3h9v9" fill="none" stroke="currentColor"/></svg></button></header>
+  <section class="intro"><div class="eyebrow"><i></i> EXPEDITION 001 / <span id="zone-name">THE TWILIGHT ZONE</span></div><h1>A world<br>beyond<br><em>the light.</em></h1><p>Descend into the unknown.<br>Come face to face with a deep-sea giant.</p><div class="coordinates">N 36° 42′ 18″ &nbsp; · &nbsp; W 25° 08′ 44″<span>AN IMAGINED NORTH ATLANTIC ENCOUNTER</span></div></section>
+  <section class="beach-intro"><div class="eyebrow"><i></i> OKINAWA-INSPIRED / BEACH BBQ</div><h1>A taste of<br><em>the islands.</em></h1><p>From the midnight sea to a charcoal fire.<br>One very big ikayaki. A little island magic.</p><span class="beach-tag">SALT AIR &nbsp; / &nbsp; SOY GLAZE &nbsp; / &nbsp; SLOW AFTERNOONS</span></section>
+  <section class="beach-specimen"><span>THE CATCH OF THE DAY</span><h2>Giant ikayaki</h2><p>Whole squid · charcoal grilled</p><small>AN IMAGINED ISLAND COOKOUT</small></section>
+  <aside class="depth-control"><span class="vertical-label">DEPTH BELOW SURFACE</span><div class="depth-line"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><label for="depth"><strong id="depth-value">850</strong><span>METERS</span></label><input id="depth" type="range" min="200" max="1500" value="850" step="10" aria-label="Ocean depth in meters"><span class="depth-caption">DESCEND ↓</span></aside>
+  <section class="specimen"><div class="specimen-number">01 <span>/ SPECIMEN</span></div><h2>Giant squid</h2><p>Architeuthis dux</p><button id="inspect" aria-pressed="false">Inspect anatomy <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M3 13L13 3M4 3h9v9" stroke="currentColor" fill="none"/></svg></button><button id="beak-view" aria-pressed="false">Beak close-up <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M3 13L13 3M4 3h9v9" stroke="currentColor" fill="none"/></svg></button><div class="specimen-details"><span>UP TO 13 M <small>TOTAL LENGTH</small></span><span>8 + 2 <small>ARMS + TENTACLES</small></span></div></section>
+  <section id="beak-panel" class="beak-panel" hidden aria-label="Beak anatomy inspection">
+    <button id="beak-back">← Back to the squid</button>
+    <div class="eyebrow">ANATOMY STUDY / 02</div><h2>The beak.</h2>
+    <p>Two chitinous jaws, held inside a muscular mouth at the center of the arms.</p>
+    <ol class="beak-key"><li><span>01</span><div>Upper beak<small>A hooked rostrum and curved hood.</small></div></li><li><span>02</span><div>Lower beak<small>A broader jaw with a cutting edge.</small></div></li><li><span>03</span><div>Buccal lips<small>Folded tissue surrounding the jaws.</small></div></li></ol>
+    <label class="gape-label" for="jaw-opening">Jaw opening <output id="jaw-value" for="jaw-opening">35%</output></label>
+    <input id="jaw-opening" type="range" min="0" max="100" value="35" step="1">
+    <p class="study-note">Illustrative articulation. Drag to orbit; scroll or pinch to examine the surface.</p>
+  </section>
+  <div id="tap-cue"><div aria-hidden="true"><i></i><i></i><i></i></div><span id="tap-status" role="status" aria-live="polite">TAP THE SQUID 3×</span></div>
+  <button id="return-deep"><span aria-hidden="true">≈</span> Back to the deep</button>
+  <div class="interaction-hint"><span>⤧</span> DRAG TO EXPLORE <b>·</b> SCROLL TO ZOOM</div>
+  <nav class="controls" aria-label="Scene controls"><button id="motion" aria-label="Pause animation" title="Pause animation"><span id="motion-icon">Ⅱ</span><span class="control-label">Pause</span></button><span class="divider"></span><button id="light" aria-pressed="true" title="Toggle ROV floodlights"><span>☼</span><span class="control-label">ROV light</span></button><button id="sound" aria-pressed="false" title="Ocean ambience"><span>≋</span><span class="control-label">Sound</span></button><span class="divider"></span><button id="reset" title="Reset camera"><span>↺</span><span class="control-label">Reset</span></button></nav>
+  <footer><span><i></i> LIVE SIMULATION</span><span id="illumination-status" role="status">ROV FLOODLIGHTS · ON</span><span>THREE.JS EXPLORATION <b aria-hidden="true">&#8599;</b></span></footer>
+  <div id="loading"><div class="loader-mark">A</div><span>ENTERING THE DEEP</span><p id="loading-message">Preparing your encounter…</p></div>
+  <dialog id="notes"><button id="close-notes" aria-label="Close field notes">×</button><div class="eyebrow">FIELD NOTES / 001</div><h2>Built around the biology.</h2><p><em>Architeuthis dux</em> has a long muscular mantle, small ovoid fins at its rear, and large eyes embedded in the sides of its head. A ventral funnel expels water for jet propulsion.</p><p>Eight grasping arms carry two rows of suckers on their inner surfaces. Two much longer feeding tentacles end in narrow clubs: four main sucker rows, enlarged medial suckers, and a dense wrist region. Small locking suckers and knobs also run along the stalks. The paired chitinous beak sits inside the arm crown. Its dark cutting tips project from a muscular buccal mass; broader, thinner supporting walls extend into the surrounding tissue.</p><p>At 850 m, natural light is extremely faint. Here the red-brown skin is revealed by simulated ROV floodlights. Switch them off to see the difference; no sunlight is modeled at 1,000 m and deeper.</p><p>There is also a playful detour: tap the squid three times to turn it into giant ikayaki at an Okinawa-inspired beach barbecue. Use “Back to the deep” to return. The cookout is an imagined scene.</p><p class="note">An anatomy-informed procedural model, not a scan of a specimen. Body proportions are illustrative; posture, movement, and microscopic structure remain simplified. The jaw-opening control illustrates the two parts; it is not a validated model of the feeding mechanics. Sucker denticles are schematic. Giant squid do not have light-producing photophores.</p><div class="references"><a href="https://tolweb.org/notes/?note_id=5453" target="_blank" rel="noreferrer">Tree of Life — upper beak specimen photographs</a><a href="https://tolweb.org/notes/?note_id=5452" target="_blank" rel="noreferrer">Tree of Life — lower beak specimen photographs</a><a href="https://ocean.si.edu/ocean-life/invertebrates/giant-squid" target="_blank" rel="noreferrer">Smithsonian Ocean — anatomy &amp; proportions</a><a href="https://tolweb.org/Architeuthis" target="_blank" rel="noreferrer">Tree of Life — fins &amp; sucker arrangement</a><a href="https://oceanservice.noaa.gov/facts/light_travel.html" target="_blank" rel="noreferrer">NOAA — light and ocean depth</a></div></dialog>
+  <dialog id="illustrated-beak"><button id="close-illustrated-beak" aria-label="Close beak view">×</button><div class="eyebrow">BEAK STUDY / ILLUSTRATED VIEW</div><h2>A closer look.</h2><img src="./assets/beak.webp" alt="Hooked upper beak and broad lower jaw inside the squid’s folded buccal lips" loading="lazy"><p>A still view of the sculpted jaws and surrounding mouth tissue. The interactive 3D inspection is available when the browser can run it.</p></dialog>
+  <script type="module" src="./boot.js"></script>
+</body>
+</html>

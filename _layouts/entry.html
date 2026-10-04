@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ '/assets/css/journal.css' | relative_url }}">
+  {% feed_meta %}
+  {% seo %}
+</head>
+{%- assign notes = content | strip -%}
+<body class="entry-page{% if page.src %} has-work{% endif %}">
+  <header class="bar">
+    <a class="bar-home" href="{{ '/' | relative_url }}" title="All entries">{{ site.title }}</a>
+    <span class="bar-when"><span class="bar-day">Day {% include day.html post=page %} · </span><time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: "%-d %b" }}<span class="bar-year"> {{ page.date | date: "%Y" }}</span></time></span>
+    <span class="bar-title">{{ page.title }}</span>
+    {%- if page.ai %}<span class="bar-ai">{{ page.ai }}</span>{% endif %}
+    <span class="bar-spacer"></span>
+    {%- if page.src and notes != "" %}<button class="bar-btn" id="notes-toggle" aria-expanded="false" aria-controls="notes">Notes</button>{% endif %}
+    {%- if page.notes_url %}<a class="bar-btn" href="{{ page.notes_url }}" target="_blank" rel="noopener">Notes ↗</a>{% endif %}
+    {%- if page.src %}<a class="bar-btn" href="{{ page.src | relative_url }}" title="Open on its own"><span class="bar-label">Open </span>↗</a>{% endif %}
+    <nav class="bar-pager">
+      {%- if page.previous %}<a href="{{ page.previous.url | relative_url }}" title="Previous: {{ page.previous.title | escape }}">←</a>{% else %}<span>←</span>{% endif %}
+      {%- if page.next %}<a href="{{ page.next.url | relative_url }}" title="Next: {{ page.next.title | escape }}">→</a>{% else %}<span>→</span>{% endif %}
+    </nav>
+  </header>
+
+  {%- if page.src %}
+  <iframe class="work" src="{{ page.src | relative_url }}" title="{{ page.title | escape }}" allow="fullscreen; autoplay; clipboard-write; xr-spatial-tracking" allowfullscreen></iframe>
+  {%- if notes != "" %}
+  <aside class="notes" id="notes" hidden>{{ content }}</aside>
+  <script>
+    (function () {
+      var b = document.getElementById('notes-toggle'), n = document.getElementById('notes');
+      function set(open) { n.hidden = !open; b.setAttribute('aria-expanded', open); }
+      b.addEventListener('click', function () { set(n.hidden); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
+    })();
+  </script>
+  {%- endif %}
+  {%- else %}
+  <main class="text-entry">
+    <article class="entry">
+      <h1>{{ page.title }}</h1>
+      {{ content }}
+    </article>
+  </main>
+  {%- endif %}
+</body>
+</html>

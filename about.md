@@ -4,15 +4,9 @@ permalink: /about/
 ---
 # About
 
-This is a working notebook. Most days I try something small with AI — a prompt, a tool, a
-model, a half-formed idea — and write down what happened.
+A working journal of things made with AI, most days. Sometimes an entry is a few paragraphs;
+more often it's a whole thing — a standalone webpage, a toy, an image — shown exactly as it
+was made, with a thin bar on top saying when, which AI, and where the notes are.
 
-The point isn't polish. It's to treat experimenting as a way of responding to the world:
-notice something, poke at it, record what came back, and see what accumulates.
-
-Each entry roughly follows the same shape:
-
-- **Question** — what I wanted to find out
-- **What I tried** — the setup, prompts, tools
-- **What happened** — results, surprises, failures
-- **Takeaway** — what I'd keep, and what's next
+The point isn't polish. It's treating making things as a way of responding to the world:
+read something, notice something, build a response, keep it, and see what accumulates.

@@ -17,9 +17,21 @@ plugins:
 
 defaults:
   - scope: { path: "", type: posts }
-    values: { layout: post }
+    values: { layout: entry }
   - scope: { path: "" }
     values: { layout: default }
+
+# Keep works/ byte-for-byte: GitHub Pages would otherwise turn stray Markdown files
+# (README.md, notes) inside a work into pages.
+require_front_matter: true
+readme_index:
+  enabled: false
+
+# Built sites often ship folders starting with "_" which Jekyll would otherwise skip.
+include:
+  - _next
+  - _astro
+  - _app
 
 exclude:
   - README.md

@@ -1,18 +1,32 @@
 ---
 title: Journal
+wide: true
 ---
 <p class="intro">{{ site.description }}</p>
 
-{%- assign months = site.posts | group_by_exp: "p", "p.date | date: '%B %Y'" -%}
-{%- for month in months %}
-<section class="month">
-  <h2>{{ month.name }}</h2>
-  <ul class="entries">
-    {%- for post in month.items %}
+{%- assign days = site.posts | group_by_exp: "p", "p.date | date: '%Y-%m-%d'" -%}
+{%- for day in days %}
+{%- assign entries = day.items | reverse -%}
+<section class="day">
+  <h2><span>Day {% include day.html post=entries.first %}</span> {{ entries.first.date | date: "%A %-d %B %Y" }}</h2>
+  <ul class="grid">
+    {%- for post in entries %}
+    {%- assign notes = post.content | strip -%}
+    {%- assign has_notes = false -%}
+    {%- if post.notes_url -%}{%- assign has_notes = true -%}{%- elsif post.src and notes != "" -%}{%- assign has_notes = true -%}{%- endif -%}
     <li>
-      <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%d" }}</time>
-      <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-      {%- if post.verdict %}<span class="verdict">{{ post.verdict }}</span>{% endif %}
+      <a class="card" href="{{ post.url | relative_url }}">
+        {%- if post.thumb %}
+        <img class="thumb" src="{{ post.thumb | relative_url }}" alt="" loading="lazy">
+        {%- else %}
+        <div class="thumb thumb-text"><p>{{ post.excerpt | strip_html | truncatewords: 40 }}</p></div>
+        {%- endif %}
+        <span class="card-title">{{ post.title }}</span>
+        <span class="card-meta">
+          {%- if post.ai %}{{ post.ai }}{% endif %}
+          {%- if has_notes %} · notes{% endif %}
+        </span>
+      </a>
     </li>
     {%- endfor %}
   </ul>

@@ -1,0 +1,7 @@
+{%- comment -%}Outputs the journal day number (1 = first day with an entry) for include.post.{%- endcomment -%}
+{%- assign _day = 0 -%}{%- assign _last = "" -%}
+{%- for _p in site.posts reversed -%}
+  {%- assign _d = _p.date | date: "%Y-%m-%d" -%}
+  {%- if _d != _last -%}{%- assign _day = _day | plus: 1 -%}{%- assign _last = _d -%}{%- endif -%}
+  {%- if _p.url == include.post.url -%}{%- break -%}{%- endif -%}
+{%- endfor -%}{{ _day }}

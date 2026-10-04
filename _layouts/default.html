@@ -7,11 +7,10 @@
   {% feed_meta %}
   {% seo %}
 </head>
-<body>
+<body class="site{% if page.wide %} wide{% endif %}">
   <header class="site-header">
     <a class="site-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
     <nav>
-      <a href="{{ '/tags/' | relative_url }}">Tags</a>
       <a href="{{ '/about/' | relative_url }}">About</a>
       <a href="{{ '/feed.xml' | relative_url }}">RSS</a>
     </nav>
@@ -20,7 +19,8 @@
     {{ content }}
   </main>
   <footer class="site-footer">
-    {{ site.posts.size }} entries · started {{ site.posts.last.date | date: "%-d %B %Y" }}
+    {%- assign days = site.posts | group_by_exp: "p", "p.date | date: '%Y-%m-%d'" -%}
+    {{ site.posts.size }} entries over {{ days.size }} days · started {{ site.posts.last.date | date: "%-d %B %Y" }}
   </footer>
 </body>
 </html>

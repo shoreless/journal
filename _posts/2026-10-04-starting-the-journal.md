@@ -1,11 +1,10 @@
 ---
 title: "Starting the journal"
-date: 2026-10-04
-tags: [meta]
-tools: [Claude Code]
-question: "Can a daily habit of small AI experiments become a way of responding to the world?"
-verdict: "Set up — let's see"
+date: 2026-10-04 12:24:16 +0000
+ai: Claude Code
 ---
+
+> Can a daily habit of small AI experiments become a way of responding to the world?
 
 ## What I tried
 
@@ -22,3 +21,8 @@ takeaway.
 
 The format is deliberately light so that writing an entry costs less than the experiment
 itself. The rule: if I tried something, it gets an entry, even if it failed.
+
+*Later the same day:* the first real experiment turned up as a whole website, not words — so
+the journal changed shape. An entry can be anything now: a standalone page, an image, a
+paragraph. Each one gets a thin bar on top saying when it was made, which AI it was made with,
+and where its notes are.
