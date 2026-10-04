@@ -20,7 +20,7 @@
   </main>
   <footer class="site-footer">
     {%- assign days = site.posts | group_by_exp: "p", "p.date | date: '%Y-%m-%d'" -%}
-    {{ site.posts.size }} entries over {{ days.size }} days · started {{ site.posts.last.date | date: "%-d %B %Y" }}
+    {{ site.posts.size }} {% if site.posts.size == 1 %}entry{% else %}entries{% endif %} over {{ days.size }} {% if days.size == 1 %}day{% else %}days{% endif %} · started {{ site.posts.last.date | date: "%-d %B %Y" }}
   </footer>
 </body>
 </html>
