@@ -58,5 +58,9 @@ fi
 } > "$post"
 
 echo "$post"
-[[ -n "$src_line" ]] && echo "$dest/"
+if [[ -n "$src_line" ]]; then
+  echo "$dest/"
+  ignored=$(git ls-files --others --ignored --exclude-standard "$dest")
+  [[ -n "$ignored" ]] && printf 'Warning: git would ignore these files, so they would be missing online:\n%s\n' "$ignored" >&2
+fi
 exit 0

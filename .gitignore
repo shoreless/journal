@@ -1,7 +1,8 @@
-_site/
-.jekyll-cache/
-.jekyll-metadata
-.bundle/
-vendor/
-Gemfile.lock
-.sass-cache/
+# Anchored to the repo root with a leading "/" so nothing inside works/ is ever ignored.
+/_site/
+/.jekyll-cache/
+/.jekyll-metadata
+/.bundle/
+/vendor/
+/Gemfile.lock
+/.sass-cache/
