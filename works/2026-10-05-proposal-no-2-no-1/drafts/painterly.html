@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#000">
+<title>Fl(2) 10s</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #begin {
+    position: fixed; inset: 0; border: 0; padding: 0; margin: 0;
+    background: #000; cursor: pointer; transition: opacity 4.5s ease;
+  }
+  #begin.gone { opacity: 0; pointer-events: none; }
+  #begin i {
+    position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
+    border-radius: 50%; background: #f4efe6;
+    box-shadow: 0 0 12px 4px rgba(244,239,230,.35);
+    animation: fl2 10s infinite;
+  }
+  /* Two white flashes every ten seconds, like the real light. */
+  @keyframes fl2 {
+    0%, 1.5%, 14%, 15.5%, 100% { opacity: .08; }
+    3%, 4.5% { opacity: 1; }
+    9% { opacity: .08; }
+    17%, 18.5% { opacity: 1; }
+    23% { opacity: .08; }
+  }
+  .corner {
+    position: fixed; bottom: 14px; width: 34px; height: 34px; border: 0; padding: 7px;
+    background: none; color: #d8d2c8; opacity: 0; cursor: pointer; transition: opacity 1.2s;
+  }
+  .corner svg { width: 100%; height: 100%; }
+  #mute { right: 14px; }
+  #again { right: 54px; display: none; }
+  body.awake .corner { opacity: .32; }
+  body.awake .corner:hover, .corner:focus-visible { opacity: .8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="begin" aria-label="Begin, with sound"><i></i></button>
+<button id="mute" class="corner" aria-label="Sound off" aria-pressed="false">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <path d="M3 8h3l4-3v10l-4-3H3z" fill="currentColor" stroke="none"/>
+    <path class="on" d="M13 7.5c1 1.4 1 3.6 0 5M15.5 5.5c2 2.6 2 6.4 0 9"/>
+    <path class="off" d="M13 7.5l4.5 5M17.5 7.5l-4.5 5" style="display:none"/>
+  </svg>
+</button>
+<button id="again" class="corner" aria-label="Watch again">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <path d="M15.5 10a5.5 5.5 0 1 1-1.8-4.1M14 2.8v3.4h-3.4"/>
+  </svg>
+</button>
+<script>
+'use strict';
+// ---------------------------------------------------------------------------
+// A cliff at dusk, seen from a lighthouse across the water. The light turns:
+// two white flashes every ten seconds. Whatever happens on the cliff, we only
+// see it when the beam comes round.
+// ---------------------------------------------------------------------------
+
+const W = 1920, H = 1080, HORIZON = 470;
+const FOCUS = { x: 1060, y: 600 };            // kept on screen when cropped
+
+// ---- seeded randomness ----------------------------------------------------
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+
+// ---- geography ------------------------------------------------------------
+// Midpoint-displaced ridge between two points.
+function ridge(x0, y0, x1, y1, rough, seed, levels = 8) {
+  const r = rng(seed);
+  let pts = [[x0, y0], [x1, y1]];
+  let amp = rough * Math.abs(x1 - x0 || y1 - y0);
+  for (let l = 0; l < levels; l++) {
+    const next = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+      next.push(pts[i]);
+      const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+      const off = (r() * 2 - 1) * amp;
+      next.push([(ax + bx) / 2 - dy / len * off, (ay + by) / 2 + dx / len * off]);
+    }
+    next.push(pts[pts.length - 1]);
+    pts = next;
+    amp *= 0.52;
+  }
+  return pts;
+}
+function chain(ctrl, rough, seed) {
+  let out = [];
+  for (let i = 0; i < ctrl.length - 1; i++) {
+    const seg = ridge(ctrl[i][0], ctrl[i][1], ctrl[i + 1][0], ctrl[i + 1][1], rough, seed + i * 17, 7);
+    out = out.concat(i ? seg.slice(1) : seg);
+  }
+  return out;
+}
+
+// Distant hills of the park, left.
+const farA = chain([[-20, 392], [260, 372], [520, 430], [760, 476]], 0.07, 11)
+  .concat([[760, 490], [-20, 490]]);
+// The long ridge behind the cliff, with the road on it.
+const farBTop = chain([[600, 476], [860, 430], [1120, 392], [1420, 404], [1700, 368], [1940, 352]], 0.06, 23);
+const farB = farBTop.concat([[1940, 660], [900, 660], [860, 500], [600, 490]]);
+// The cliff the two of them stand on. Its top runs right from the edge.
+const cliffTop = (() => {
+  const raw = chain([[928, 572], [948, 548], [975, 562], [1000, 560], [1120, 557], [1175, 540], [1215, 512], [1250, 532],
+    [1310, 498], [1350, 522], [1440, 504], [1530, 470], [1580, 496], [1690, 482], [1800, 452], [1940, 466]], 0.05, 41);
+  // Level ground where the two of them stand.
+  return raw.map(([x, y]) => { const k = smooth(1 - Math.abs(x - 1060) / 70); return [x, lerp(y, 559 - (x - 1000) * .02, k)]; });
+})();
+const cliffFace = chain([[872, 822], [884, 740], [866, 690], [902, 640], [910, 600], [928, 572]], 0.2, 43);
+const waterline = chain([[1940, 826], [1500, 818], [1100, 828], [872, 822]], 0.01, 47);
+const cliff = cliffFace.concat(cliffTop.slice(1), [[1940, 826]], waterline.slice(1));
+// Our own rock, below the light.
+const nearL = chain([[-20, 930], [220, 905], [420, 960], [640, 1010], [760, 1090]], 0.05, 61)
+  .concat([[-20, 1090]]);
+const nearR = chain([[1560, 1090], [1700, 1000], [1820, 975], [1940, 950]], 0.05, 67)
+  .concat([[1940, 1090]]);
+
+const road = (() => {
+  const c = [[1930, 406], [1800, 424], [1680, 414], [1560, 440], [1440, 432], [1330, 455], [1220, 450], [1120, 474]];
+  const out = [];
+  for (let i = 0; i < c.length - 1; i++)
+    for (let s = 0; s < 1; s += 0.05) out.push([lerp(c[i][0], c[i + 1][0], s), lerp(c[i][1], c[i + 1][1], s) + Math.sin(s * Math.PI) * 4]);
+  out.push(c[c.length - 1]);
+  return out;
+})();
+function along(path, u) {
+  const f = clamp(u, 0, 1) * (path.length - 1), i = Math.floor(f), k = f - i;
+  const a = path[i], b = path[Math.min(i + 1, path.length - 1)];
+  return [lerp(a[0], b[0], k), lerp(a[1], b[1], k)];
+}
+function topY(x) {
+  for (let i = 0; i < cliffTop.length - 1; i++) {
+    const a = cliffTop[i], b = cliffTop[i + 1];
+    if (x >= a[0] && x <= b[0]) return lerp(a[1], b[1], (x - a[0]) / (b[0] - a[0] || 1));
+  }
+  return 560;
+}
+const toPath = pts => { const p = new Path2D(); p.moveTo(pts[0][0], pts[0][1]); for (const q of pts) p.lineTo(q[0], q[1]); p.closePath(); return p; };
+
+// ---- painting ---------------------------------------------------------------
+// Every layer is painted twice from the same seed: once as it looks in the
+// dusk, once as it looks with the beam on it. The beam reveals the second.
+function layer(R) {
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * R); c.height = Math.round(H * R);
+  const g = c.getContext('2d'); g.scale(R, R); g.lineCap = 'round';
+  return [c, g];
+}
+function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+function jitter(c, r, n) { return [c[0] + (r() - .5) * n, c[1] + (r() - .5) * n, c[2] + (r() - .5) * n]; }
+
+function paintRock(g, pts, o) {
+  const r = rng(o.seed), path = toPath(pts);
+  let minY = 1e9, maxY = -1e9, minX = 1e9, maxX = -1e9;
+  for (const [x, y] of pts) { minY = Math.min(minY, y); maxY = Math.max(maxY, y); minX = Math.min(minX, x); maxX = Math.max(maxX, x); }
+  g.save(); g.clip(path);
+  const grad = g.createLinearGradient(0, minY, 0, maxY);
+  grad.addColorStop(0, rgba(o.top, 1)); grad.addColorStop(1, rgba(o.bottom, 1));
+  g.fillStyle = grad; g.fillRect(minX - 5, minY - 5, maxX - minX + 10, maxY - minY + 10);
+  // Broad soft patches, then strata strokes running on the diagonal of the schist.
+  for (let i = 0; i < o.n * 0.08; i++) {
+    const x = lerp(minX, maxX, r()), y = lerp(minY, maxY, r()), rad = 20 + r() * 80;
+    const rg = g.createRadialGradient(x, y, 0, x, y, rad);
+    const col = r() < .5 ? o.light : o.dark;
+    rg.addColorStop(0, rgba(col, o.alpha * .5)); rg.addColorStop(1, rgba(col, 0));
+    g.fillStyle = rg; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  for (let i = 0; i < o.n; i++) {
+    const x = lerp(minX, maxX, r()), y = lerp(minY, maxY, Math.pow(r(), o.bias || 1));
+    const a = o.angle + (r() - .5) * .6, len = o.len * (.4 + r());
+    const col = jitter(r() < .55 ? o.light : o.dark, r, 22);
+    g.strokeStyle = rgba(col, o.alpha * (.4 + r() * .8));
+    g.lineWidth = o.width * (.5 + r());
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
+  }
+  // Cracks.
+  g.strokeStyle = rgba(o.crack, o.alpha * 1.2);
+  for (let i = 0; i < o.n * 0.03; i++) {
+    let x = lerp(minX, maxX, r()), y = lerp(minY, maxY, r());
+    g.lineWidth = .8 + r() * 1.6; g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 4; k++) { x += Math.cos(o.angle + .9) * (8 + r() * 18); y += Math.sin(o.angle + .9) * (8 + r() * 18); g.lineTo(x + (r() - .5) * 6, y); }
+    g.stroke();
+  }
+  g.restore();
+  // A darker lip along the top edge.
+  g.save(); g.clip(path);
+  g.strokeStyle = rgba(o.edge, .5); g.lineWidth = 3;
+  g.beginPath(); pts.slice(0, o.edgeCount || pts.length).forEach(([x, y], i) => i ? g.lineTo(x, y + 2) : g.moveTo(x, y + 2)); g.stroke();
+  g.restore();
+}
+
+function paintSky(g, stops, seed, glow) {
+  const grad = g.createLinearGradient(0, 0, 0, HORIZON + 40);
+  stops.forEach(([p, c]) => grad.addColorStop(p, rgba(c, 1)));
+  g.fillStyle = grad; g.fillRect(0, 0, W, HORIZON + 60);
+  const r = rng(seed);
+  // Long horizontal cloud smears.
+  for (let i = 0; i < 520; i++) {
+    const y = Math.pow(r(), .7) * HORIZON, x = r() * W, len = 60 + r() * 260;
+    const t = y / HORIZON;
+    const col = jitter(t > .7 ? glow : stops[1][1], r, 30);
+    g.strokeStyle = rgba(col, .05 + r() * .08 * t);
+    g.lineWidth = 3 + r() * 14;
+    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + len / 2, y + (r() - .5) * 8, x + len, y + (r() - .5) * 6); g.stroke();
+  }
+}
+
+function paintSea(g, o) {
+  const r = rng(o.seed);
+  const grad = g.createLinearGradient(0, HORIZON, 0, H);
+  grad.addColorStop(0, rgba(o.far, 1)); grad.addColorStop(1, rgba(o.near, 1));
+  g.fillStyle = grad; g.fillRect(0, HORIZON - 2, W, H - HORIZON + 2);
+  for (let i = 0; i < o.n; i++) {
+    const d = Math.pow(r(), 1.6);                       // more strokes near the horizon
+    const y = HORIZON + d * (H - HORIZON), x = r() * W;
+    const len = (10 + r() * 50) * (0.4 + d * 2.2);
+    const col = jitter(r() < .5 ? o.light : o.dark, r, 18);
+    g.strokeStyle = rgba(col, o.alpha * (.3 + r()));
+    g.lineWidth = (.7 + r() * 2.4) * (0.5 + d * 2);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + len, y + (r() - .5) * 2); g.stroke();
+  }
+}
+
+let R = 1, L = {};
+function buildLayers() {
+  const sky = layer(R), night = layer(R);
+  paintSky(sky[1], [[0, [16, 18, 30]], [.45, [38, 36, 54]], [.78, [88, 66, 80]], [.93, [138, 94, 92]], [1, [160, 112, 98]]], 3, [120, 84, 86]);
+  paintSky(night[1], [[0, [4, 5, 11]], [.5, [10, 12, 24]], [.85, [26, 26, 44]], [1, [44, 38, 56]]], 5, [52, 44, 64]);
+
+  const mk = (fn) => { const d = layer(R), l = layer(R); fn(d[1], false); fn(l[1], true); return { dark: d[0], lit: l[0] }; };
+  L.sky = sky[0]; L.night = night[0];
+  L.sea = mk((g, lit) => paintSea(g, lit
+    ? { seed: 7, far: [96, 100, 116], near: [70, 78, 92], light: [214, 220, 228], dark: [52, 58, 74], alpha: .55, n: 9000 }
+    : { seed: 7, far: [64, 58, 78], near: [16, 18, 28], light: [92, 80, 102], dark: [10, 12, 20], alpha: .45, n: 9000 }));
+  L.farA = mk((g, lit) => paintRock(g, farA, lit
+    ? { seed: 13, top: [104, 102, 118], bottom: [88, 88, 104], light: [140, 138, 150], dark: [70, 70, 86], crack: [60, 60, 76], edge: [80, 80, 96], alpha: .25, n: 1400, angle: -.35, len: 26, width: 4 }
+    : { seed: 13, top: [70, 58, 84], bottom: [50, 44, 66], light: [96, 80, 106], dark: [38, 34, 54], crack: [30, 28, 44], edge: [44, 38, 60], alpha: .25, n: 1400, angle: -.35, len: 26, width: 4 }));
+  L.farB = mk((g, lit) => {
+    paintRock(g, farB, lit
+      ? { seed: 29, top: [112, 108, 120], bottom: [74, 74, 88], light: [150, 146, 152], dark: [64, 64, 80], crack: [52, 52, 66], edge: [70, 70, 86], alpha: .3, n: 3200, angle: -.4, len: 30, width: 4.5, bias: 1.4 }
+      : { seed: 29, top: [52, 44, 64], bottom: [26, 24, 38], light: [72, 60, 82], dark: [22, 20, 32], crack: [18, 16, 26], edge: [30, 26, 42], alpha: .3, n: 3200, angle: -.4, len: 30, width: 4.5, bias: 1.4 });
+    // The road through the park.
+    g.save(); g.clip(toPath(farB));
+    g.strokeStyle = lit ? 'rgba(200,196,188,.55)' : 'rgba(110,96,110,.28)';
+    g.lineWidth = 2.2; g.beginPath(); road.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+    g.restore();
+  });
+  L.cliff = mk((g, lit) => paintRock(g, cliff, lit
+    ? { seed: 53, top: [198, 190, 178], bottom: [96, 94, 102], light: [236, 230, 218], dark: [92, 90, 100], crack: [60, 58, 70], edge: [120, 116, 120], alpha: .42, n: 7000, angle: -.55, len: 34, width: 5, bias: 1.2, edgeCount: cliffFace.length + cliffTop.length - 1 }
+    : { seed: 53, top: [40, 34, 46], bottom: [12, 12, 20], light: [58, 48, 62], dark: [10, 10, 18], crack: [6, 6, 12], edge: [18, 16, 26], alpha: .42, n: 7000, angle: -.55, len: 34, width: 5, bias: 1.2, edgeCount: cliffFace.length + cliffTop.length - 1 }));
+  const near = layer(R);
+  for (const [pts, seed] of [[nearL, 71], [nearR, 73]])
+    paintRock(near[1], pts, { seed, top: [18, 16, 24], bottom: [3, 3, 6], light: [30, 26, 36], dark: [2, 2, 5], crack: [0, 0, 0], edge: [8, 8, 12], alpha: .5, n: 1600, angle: -.2, len: 28, width: 6 });
+  L.near = near[0];
+}
+
+// ---- the evening, as a timeline --------------------------------------------
+const INTRO = 5, PERIOD = 10, GAP = 1.6, SWEEP = 1.35;
+const T = []; for (let k = 0; k < 6; k++) T.push(INTRO + k * PERIOD);
+const FX = 1054;                                    // where the beam stops
+const STOP = { approach: 1.6, hold: 7.5, leave: 1.5 };
+const holdStart = T[5] + STOP.approach, holdEnd = holdStart + STOP.hold, leaveEnd = holdEnd + STOP.leave;
+const T6 = leaveEnd + GAP + 7;                       // the light goes on as before
+const ENDING = T6 + PERIOD * 4;
+
+// Flashes as [start, kind]. Each sweeps the scene left to right.
+function flashes(t) {
+  const out = [];
+  for (let k = 0; k < 5; k++) out.push([T[k], 'sweep'], [T[k] + GAP, 'sweep']);
+  out.push([T[5], 'stop'], [leaveEnd + GAP, 'sweep']);
+  const n = Math.max(0, Math.floor((t - T6) / PERIOD));
+  for (let k = Math.max(0, n - 1); k <= n + 1; k++) out.push([T6 + k * PERIOD, 'sweep'], [T6 + k * PERIOD + GAP, 'sweep']);
+  return out;
+}
+// Beam centre (world x) and strength at time t, for every flash that's on.
+function beams(t) {
+  const out = [];
+  for (const [s, kind] of flashes(t)) {
+    if (kind === 'sweep') {
+      const u = (t - s) / SWEEP;
+      if (u > -0.05 && u < 1.05) out.push({ x: lerp(-420, W + 420, u), k: 1 });
+    } else {
+      if (t < s || t > leaveEnd) continue;
+      let x;
+      if (t < holdStart) x = lerp(-420, FX, 1 - Math.pow(1 - (t - s) / STOP.approach, 3));
+      else if (t < holdEnd) x = FX + Math.sin((t - holdStart) * .7) * 3;
+      else x = lerp(FX, W + 420, Math.pow((t - holdEnd) / STOP.leave, 2.4));
+      out.push({ x, k: 1, held: t >= holdStart && t < holdEnd });
+    }
+  }
+  return out;
+}
+// What the two of them are doing (only ever seen in the light).
+function pose(t) {
+  if (t < T[2] - 3) return null;
+  if (t < T[3] - 3) return { kind: 'walk', u: (t - (T[2] - 3)) / PERIOD };
+  if (t < T[4] - 3) return { kind: 'turn' };
+  if (t < T[5] - 3) return { kind: 'away' };
+  if (t < leaveEnd + .5) return { kind: 'kneel', h: t - holdStart };
+  if (t < T6 - 3) return { kind: 'hold' };
+  return null;
+}
+const dusk = t => smooth((t - INTRO) / (T6 - INTRO + 20));   // 0 = dusk, 1 = night
+
+// ---- figures ------------------------------------------------------------------
+const FIG = 60;
+// Two featureless people: a head, a body, limbs. Facing ±1.
+function person(g, x, yF, o) {
+  const h = FIG, f = o.facing, w = h * .2;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  let hipY, shY, headY;
+  if (o.kneel) {
+    hipY = yF - h * .32; shY = yF - h * .64; headY = yF - h * .75;
+    g.lineWidth = w * .42;
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x + f * h * .17, yF - h * .28); g.lineTo(x + f * h * .18, yF); g.stroke();
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x - f * h * .02, yF - 1.5); g.lineTo(x - f * h * .2, yF - 1); g.stroke();
+  } else {
+    hipY = yF - h * .48; shY = yF - h * .79; headY = yF - h * .9;
+    const s = o.stride || 0;
+    g.lineWidth = w * .42;
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x + s * h * .1 + w * .12, yF); g.stroke();
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x - s * h * .1 - w * .12, yF); g.stroke();
+  }
+  g.beginPath(); g.ellipse(x + f * .6, (hipY + shY) / 2, w * .56, (hipY - shY) / 2 + 2, f * (o.lean || 0), 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(x + f * 1.2, headY, h * .078, 0, Math.PI * 2); g.fill();
+  g.lineWidth = w * .3;
+  for (const hand of o.hands) { g.beginPath(); g.moveTo(x + f * 1, shY + 2); g.lineTo(x + hand[0] * f * h / 46, hand[1] + yF); g.stroke(); }
+}
+function drawPair(g, p, t) {
+  const H_ = FIG, down = [[3, -H_ * .5], [-2, -H_ * .5]];
+  const A = 1036, B = A + 34;                     // her, him
+  if (p.kind === 'walk') {
+    const x = lerp(1150, 1076, smooth(p.u)), ph = t * 5.2;
+    person(g, x, topY(x), { facing: -1, stride: Math.sin(ph), hands: down });
+    person(g, x + 30, topY(x + 30), { facing: -1, stride: Math.sin(ph + 2.5), hands: down });
+  } else if (p.kind === 'turn') {
+    person(g, A, topY(A), { facing: 1, hands: [[13, -H_ * .9], [2, -H_ * .5]] });
+    person(g, B, topY(B), { facing: -1, hands: down });
+  } else if (p.kind === 'away') {
+    person(g, A - 4, topY(A - 4), { facing: -1, hands: [[-1, -H_ * .5], [6, -H_ * .55]], lean: .08 });
+    person(g, B, topY(B), { facing: -1, hands: down });
+  } else if (p.kind === 'kneel') {
+    const k = smooth((p.h - 2.6) / 1.2);           // her hands come up to her face
+    person(g, A, topY(A), { facing: 1, hands: [[lerp(2, 3, k), lerp(-H_ * .5, -H_ * .86, k)], [lerp(-2, 4, k), lerp(-H_ * .5, -H_ * .84, k)]] });
+    person(g, B, topY(B), { facing: -1, kneel: true, hands: [[12, -H_ * .55], [3, -H_ * .38]] });
+  } else if (p.kind === 'hold') {
+    person(g, A + 10, topY(A + 10), { facing: 1, hands: [[9, -H_ * .72], [11, -H_ * .62]], lean: .1 });
+    person(g, A + 24, topY(A + 24), { facing: -1, hands: [[9, -H_ * .74], [10, -H_ * .64]], lean: .1 });
+  }
+}
+
+// ---- bats, the car, stars -------------------------------------------------------
+const stars = (() => { const r = rng(91), s = []; for (let i = 0; i < 260; i++) s.push([r() * W, Math.pow(r(), 1.4) * (HORIZON - 40), r() * .9 + .3, r() * 6]); return s; })();
+const bats = (() => { const r = rng(97), b = []; for (let i = 0; i < 4; i++) b.push({ cx: 900 + r() * 500, cy: 280 + r() * 160, rx: 60 + r() * 140, ry: 20 + r() * 50, sp: .35 + r() * .5, ph: r() * 6 }); return b; })();
+function bat(g, x, y, t, s = 1) {
+  const flap = Math.sin(t * 24) * 3 * s;
+  g.beginPath(); g.moveTo(x - 7 * s, y - flap); g.quadraticCurveTo(x - 3 * s, y + 1 * s, x, y);
+  g.quadraticCurveTo(x + 3 * s, y + 1 * s, x + 7 * s, y - flap); g.lineTo(x + 3 * s, y + 2 * s); g.lineTo(x, y + 1.5 * s);
+  g.lineTo(x - 3 * s, y + 2 * s); g.closePath(); g.fill();
+}
+
+// ---- canvas & frame --------------------------------------------------------------
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const litBuf = document.createElement('canvas'), lit = litBuf.getContext('2d');
+const maskBuf = document.createElement('canvas'), mask = maskBuf.getContext('2d');
+let DPR = 1, cw = 0, ch = 0, view = { s: 1, ox: 0, oy: 0 }, grain, vignette;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const vw = innerWidth, vh = innerHeight;
+  cw = cv.width = Math.round(vw * DPR); ch = cv.height = Math.round(vh * DPR);
+  litBuf.width = maskBuf.width = Math.round(cw / 2); litBuf.height = maskBuf.height = Math.round(ch / 2);
+  const s = Math.max(vw / W, vh / H);
+  view = { s, ox: clamp(vw / 2 - FOCUS.x * s, vw - W * s, 0), oy: clamp(vh / 2 - FOCUS.y * s, vh - H * s, 0) };
+  const want = clamp(s * DPR, .6, 2);
+  if (Math.abs(want - R) > .25 || !L.sky) { R = want; buildLayers(); }
+  vignette = document.createElement('canvas'); vignette.width = cw; vignette.height = ch;
+  const vg = vignette.getContext('2d'), rg = vg.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * .3, cw / 2, ch / 2, Math.hypot(cw, ch) * .6);
+  rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(1, 'rgba(0,0,0,.62)');
+  vg.fillStyle = rg; vg.fillRect(0, 0, cw, ch);
+}
+function makeGrain() {
+  const c = document.createElement('canvas'); c.width = c.height = 192;
+  const g = c.getContext('2d'), d = g.createImageData(192, 192), r = rng(5);
+  for (let i = 0; i < d.data.length; i += 4) { const v = r() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0); return c;
+}
+const worldTo = (g, scale) => g.setTransform(view.s * scale, 0, 0, view.s * scale, view.ox * scale, view.oy * scale);
+
+function frame(t) {
+  const n = dusk(t), bs = beams(t), p = pose(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  worldTo(ctx, DPR);
+
+  // Sky, from afterglow to night.
+  ctx.drawImage(L.sky, 0, 0, W, H);
+  ctx.globalAlpha = n; ctx.drawImage(L.night, 0, 0, W, H); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#f2ede4';
+  for (const [x, y, b, ph] of stars) { ctx.globalAlpha = clamp(n * 1.6 - .5, 0, 1) * b * (.75 + .25 * Math.sin(t * 1.3 + ph)); ctx.fillRect(x, y, 1.6, 1.6); }
+  ctx.globalAlpha = 1;
+  // Bats against the last of the light.
+  if (t > T[1] && t < T[5] + 4) {
+    ctx.fillStyle = 'rgba(8,8,14,.85)';
+    for (const b of bats) { const a = t * b.sp + b.ph; bat(ctx, b.cx + Math.cos(a) * b.rx + Math.sin(a * 2.7) * 20, b.cy + Math.sin(a * 1.3) * b.ry, t + b.ph, .9); }
+  }
+
+  ctx.drawImage(L.farA.dark, 0, 0, W, H);
+  ctx.drawImage(L.sea.dark, 0, 0, W, H);
+  // Afterglow on the water, fading.
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 46; i++) {
+    const r = rng(i * 13 + 1), y = HORIZON + 4 + Math.pow(r(), 2) * 120, x = (r() * W + t * (6 + r() * 10)) % (W + 200) - 100;
+    ctx.strokeStyle = `rgba(150,100,96,${(1 - n) * (.05 + r() * .08) * (.6 + .4 * Math.sin(t * .8 + i))})`;
+    ctx.lineWidth = 1 + r() * 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 20 + r() * 60, y); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(L.farB.dark, 0, 0, W, H);
+  mist(ctx, t, n, false);
+  ctx.drawImage(L.cliff.dark, 0, 0, W, H);
+  foam(ctx, t, .25);
+  if (p) { ctx.fillStyle = ctx.strokeStyle = 'rgba(6,6,11,.9)'; drawPair(ctx, p, t); }
+
+  // Everything the beam touches.
+  if (bs.length) {
+    lit.setTransform(1, 0, 0, 1, 0, 0); lit.globalCompositeOperation = 'source-over'; lit.clearRect(0, 0, litBuf.width, litBuf.height);
+    worldTo(lit, DPR / 2);
+    lit.drawImage(L.farA.lit, 0, 0, W, H); lit.drawImage(L.sea.lit, 0, 0, W, H);
+    lit.drawImage(L.farB.lit, 0, 0, W, H); mist(lit, t, n, true);
+    lit.drawImage(L.cliff.lit, 0, 0, W, H); foam(lit, t, .9);
+    if (p) { lit.fillStyle = '#efe8dc'; lit.strokeStyle = '#efe8dc'; drawPair(lit, p, t); }
+    if (t > T[3] - .2 && t < T[3] + GAP + SWEEP) {   // one bat flies straight through the light
+      lit.fillStyle = 'rgba(226,220,210,.9)'; const u = (t - T[3]) / (GAP + SWEEP);
+      bat(lit, lerp(780, 1420, u), 330 + Math.sin(u * 9) * 26, t, 1.5);
+    }
+    mask.setTransform(1, 0, 0, 1, 0, 0); mask.clearRect(0, 0, maskBuf.width, maskBuf.height);
+    worldTo(mask, DPR / 2); mask.globalCompositeOperation = 'lighter';
+    for (const b of bs) {
+      const w = b.held ? 300 : 340, gr = mask.createLinearGradient(b.x - w * 1.6, 0, b.x + w * 1.6, 0);
+      [[0, 0], [.18, .08], [.34, .45], [.5, 1], [.66, .45], [.82, .08], [1, 0]].forEach(([s, a]) => gr.addColorStop(s, `rgba(0,0,0,${a * b.k})`));
+      mask.fillStyle = gr; mask.fillRect(b.x - w * 1.6, -20, w * 3.2, H + 40);
+    }
+    lit.setTransform(1, 0, 0, 1, 0, 0); lit.globalCompositeOperation = 'destination-in'; lit.drawImage(maskBuf, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(litBuf, 0, 0, cw, ch);
+
+    // The beam itself, in the air.
+    worldTo(ctx, DPR); ctx.globalCompositeOperation = 'lighter';
+    for (const b of bs) {
+      // The light leaves the lantern just above and behind us, so the shaft
+      // fans out toward the lower left of the frame and narrows where it lands.
+      const tx = b.x, ty = 545, bx = tx - 900 - (tx - 960) * .25, by = H + 260;
+      const nx = -(by - ty), ny = bx - tx, nl = Math.hypot(nx, ny);
+      for (const [wTip, wBase, a] of [[70, 420, .05], [26, 170, .06]]) {
+        const sh = ctx.createLinearGradient(tx, ty, bx, by);
+        sh.addColorStop(0, `rgba(214,218,228,${a * b.k})`); sh.addColorStop(.6, `rgba(214,218,228,${a * .5 * b.k})`); sh.addColorStop(1, 'rgba(214,218,228,0)');
+        ctx.fillStyle = sh; ctx.beginPath();
+        ctx.moveTo(tx + nx / nl * wTip, ty + ny / nl * wTip); ctx.lineTo(bx + nx / nl * wBase, by + ny / nl * wBase);
+        ctx.lineTo(bx - nx / nl * wBase, by - ny / nl * wBase); ctx.lineTo(tx - nx / nl * wTip, ty - ny / nl * wTip); ctx.closePath(); ctx.fill();
+      }
+      const hz = ctx.createRadialGradient(tx, ty - 20, 0, tx, ty - 20, 420);
+      hz.addColorStop(0, `rgba(220,222,230,${.11 * b.k})`); hz.addColorStop(1, 'rgba(220,222,230,0)');
+      ctx.save(); ctx.translate(tx, ty - 20); ctx.scale(1, .45); ctx.translate(-tx, -(ty - 20));
+      ctx.fillStyle = hz; ctx.fillRect(tx - 420, ty - 440, 840, 840); ctx.restore();
+    }
+    // The ring catches the light while it waits on them.
+    if (p && p.kind === 'kneel' && t > holdStart + .8 && t < holdEnd) {
+      const gx = 1070 - FIG * .26, gy = topY(1070) - FIG * .55, a = smooth((t - holdStart - .8) / 1.5) * (.55 + .45 * Math.sin(t * 3.1));
+      const gl = ctx.createRadialGradient(gx, gy, 0, gx, gy, 9);
+      gl.addColorStop(0, `rgba(255,252,240,${a})`); gl.addColorStop(1, 'rgba(255,252,240,0)');
+      ctx.fillStyle = gl; ctx.fillRect(gx - 9, gy - 9, 18, 18);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // Car lights crawling along the road, long before anyone is on the cliff.
+  if (t > T[1] - 6 && t < T[1] + 8) {
+    const u = (t - (T[1] - 6)) / 14, [x, y] = along(road, u), fade = smooth(u * 6) * smooth((1 - u) * 5);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const dx of [-1.6, 1.6]) {
+      const gl = ctx.createRadialGradient(x + dx, y - 2, 0, x + dx, y - 2, 7);
+      gl.addColorStop(0, `rgba(255,236,200,${.9 * fade})`); gl.addColorStop(1, 'rgba(255,236,200,0)');
+      ctx.fillStyle = gl; ctx.fillRect(x + dx - 7, y - 9, 14, 14);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.drawImage(L.near, 0, 0, W, H);
+
+  // Film of grain and a heavy vignette.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = .07; ctx.globalCompositeOperation = 'overlay';
+  ctx.fillStyle = ctx.createPattern(grain, 'repeat');
+  const gx = (Math.random() * 192) | 0, gy = (Math.random() * 192) | 0;
+  ctx.translate(gx, gy); ctx.fillRect(-gx, -gy, cw, ch); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(vignette, 0, 0);
+}
+
+function mist(g, t, n, isLit) {
+  const r = rng(31);
+  for (let i = 0; i < 7; i++) {
+    const x = (r() * W + t * (4 + r() * 6)) % (W + 600) - 300, y = HORIZON - 30 + r() * 140, rx = 260 + r() * 300;
+    const c = isLit ? [210, 212, 220] : [lerp(120, 40, n), lerp(96, 44, n), lerp(116, 64, n)];
+    const gr = g.createRadialGradient(x, y, 0, x, y, rx);
+    gr.addColorStop(0, rgba(c, isLit ? .22 : .09)); gr.addColorStop(1, rgba(c, 0));
+    g.save(); g.translate(x, y); g.scale(1, .22); g.translate(-x, -y);
+    g.fillStyle = gr; g.fillRect(x - rx, y - rx, rx * 2, rx * 2); g.restore();
+  }
+}
+function foam(g, t, a) {
+  g.lineCap = 'round';
+  for (let i = 0; i < waterline.length; i += 3) {
+    const [x, y] = waterline[i], swell = Math.max(0, Math.sin(t * .55 + x * .012) * Math.sin(t * .23 + x * .004));
+    if (swell < .05) continue;
+    g.strokeStyle = `rgba(226,228,232,${a * swell * .5})`; g.lineWidth = 1.5 + swell * 3;
+    g.beginPath(); g.moveTo(x - 6, y + 2 - swell * 6); g.lineTo(x + 8, y + 1 - swell * 4); g.stroke();
+  }
+}
+
+// ---- sound: the sea far below, and wind ------------------------------------------------
+let ac, master, sea, wash, muted = false;
+function startSound() {
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  const sr = ac.sampleRate, len = sr * 6;
+  const brownB = ac.createBuffer(1, len, sr), whiteB = ac.createBuffer(1, len, sr);
+  const b = brownB.getChannelData(0), w = whiteB.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) { const x = Math.random() * 2 - 1; w[i] = x; last = (last + .02 * x) / 1.02; b[i] = last * 3.5; }
+  const src = buf => { const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; s.loopStart = Math.random(); s.start(0, Math.random() * 5); return s; };
+  const filt = (type, f, q) => { const x = ac.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = q; return x; };
+  const gain = v => { const g = ac.createGain(); g.gain.value = v; return g; };
+
+  master = gain(0); master.connect(ac.destination);
+  master.gain.setTargetAtTime(.9, ac.currentTime, 2.2);
+  const body = gain(.55); src(brownB).connect(filt('lowpass', 110, .5)).connect(body).connect(master);
+  sea = gain(.22); src(brownB).connect(filt('lowpass', 520, .6)).connect(sea).connect(master);
+  wash = gain(.0); src(whiteB).connect(filt('bandpass', 950, .55)).connect(wash).connect(master);
+  const windF = filt('bandpass', 380, 2.6), wind = gain(.035);
+  src(whiteB).connect(windF).connect(wind).connect(master);
+  const lfo = ac.createOscillator(), lfoG = gain(150); lfo.frequency.value = .06; lfo.connect(lfoG).connect(windF.frequency); lfo.start();
+  const lfo2 = ac.createOscillator(), lfo2G = gain(.02); lfo2.frequency.value = .11; lfo2.connect(lfo2G).connect(wind.gain); lfo2.start();
+
+  (function swell() {
+    if (!ac) return;
+    const now = ac.currentTime, rise = 2.2 + Math.random() * 2.4, peak = .38 + Math.random() * .3;
+    sea.gain.setTargetAtTime(peak, now, rise / 3);
+    sea.gain.setTargetAtTime(.18, now + rise, 1.6);
+    wash.gain.setTargetAtTime(.05 + Math.random() * .05, now + rise * .8, .4);
+    wash.gain.setTargetAtTime(0, now + rise + .6, 1.4);
+    setTimeout(swell, (rise + 3.5 + Math.random() * 4) * 1000);
+  })();
+}
+function setVolume(v, tc) { if (master) master.gain.setTargetAtTime(muted ? 0 : v, ac.currentTime, tc); }
+
+// ---- run ------------------------------------------------------------------------------------
+let t0 = null, ducked = false;
+grain = makeGrain(); resize();
+addEventListener('resize', resize);
+
+// ?t=SECONDS freezes the evening at that moment (for stills).
+const still = parseFloat(new URLSearchParams(location.search).get('t'));
+if (!isNaN(still)) { document.getElementById('begin').hidden = true; t0 = 0; }
+
+function loop(now) {
+  if (t0 !== null) {
+    const t = isNaN(still) ? (now - t0) / 1000 : still;
+    frame(t);
+    const shouldDuck = t > holdStart && t < holdEnd;     // the sea seems to go quiet for a moment
+    if (shouldDuck !== ducked) { ducked = shouldDuck; setVolume(ducked ? .45 : .9, ducked ? 1.4 : 2.5); }
+    if (t > ENDING) document.getElementById('again').style.display = 'block';
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+const begin = document.getElementById('begin');
+function go() {
+  if (t0 !== null) return;
+  t0 = performance.now(); begin.classList.add('gone'); begin.blur();
+  startSound();
+  setTimeout(() => document.body.classList.add('awake'), 6000);
+}
+begin.addEventListener('click', go);
+addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(); });
+
+const muteBtn = document.getElementById('mute');
+muteBtn.addEventListener('click', () => {
+  muted = !muted; setVolume(ducked ? .45 : .9, .3);
+  muteBtn.setAttribute('aria-pressed', muted); muteBtn.setAttribute('aria-label', muted ? 'Sound on' : 'Sound off');
+  muteBtn.querySelector('.on').style.display = muted ? 'none' : ''; muteBtn.querySelector('.off').style.display = muted ? '' : 'none';
+});
+document.getElementById('again').addEventListener('click', () => { t0 = performance.now(); document.getElementById('again').style.display = 'none'; });
+</script>
+</body>
+</html>
