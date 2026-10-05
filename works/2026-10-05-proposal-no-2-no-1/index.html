@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#070a1c">
+<title>Fl(2) 10s</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #070a1c; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #begin {
+    position: fixed; inset: 0; border: 0; padding: 0; margin: 0;
+    background: #05060f; cursor: pointer; transition: opacity 2s ease;
+  }
+  #begin.gone { opacity: 0; pointer-events: none; }
+  #begin i {
+    position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
+    border-radius: 50%; background: #fff4df;
+    box-shadow: 0 0 12px 4px rgba(255,244,223,.35);
+    animation: fl2 10s infinite;
+  }
+  /* Two white flashes every ten seconds, like the real light. */
+  @keyframes fl2 {
+    0%, 1.5%, 14%, 15.5%, 100% { opacity: .08; }
+    3%, 4.5% { opacity: 1; }
+    9% { opacity: .08; }
+    17%, 18.5% { opacity: 1; }
+    23% { opacity: .08; }
+  }
+  .corner {
+    position: fixed; bottom: 14px; width: 34px; height: 34px; border: 0; padding: 7px;
+    background: none; color: #e6dcc6; opacity: 0; cursor: pointer; transition: opacity 1.2s;
+  }
+  .corner svg { width: 100%; height: 100%; }
+  #mute { right: 14px; }
+  #again { right: 54px; display: none; }
+  body.awake .corner { opacity: .3; }
+  body.awake .corner:hover, .corner:focus-visible { opacity: .8; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="begin" aria-label="Begin, with sound"><i></i></button>
+<button id="mute" class="corner" aria-label="Sound off" aria-pressed="false">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <path d="M3 8h3l4-3v10l-4-3H3z" fill="currentColor" stroke="none"/>
+    <path class="on" d="M13 7.5c1 1.4 1 3.6 0 5M15.5 5.5c2 2.6 2 6.4 0 9"/>
+    <path class="off" d="M13 7.5l4.5 5M17.5 7.5l-4.5 5" style="display:none"/>
+  </svg>
+</button>
+<button id="again" class="corner" aria-label="Watch again">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+    <path d="M15.5 10a5.5 5.5 0 1 1-1.8-4.1M14 2.8v3.4h-3.4"/>
+  </svg>
+</button>
+<script>
+'use strict';
+// ---------------------------------------------------------------------------
+// Night on the cape, as Dalí might have dreamt it. The lighthouse, propped on
+// a crutch, turns its two beams like the hands of a clock. Its light runs
+// across the rock and finds things. Then it slows, and stops, and bends.
+// ---------------------------------------------------------------------------
+
+const W = 1920, H = 1080, HORIZON = 440, COAST = 470;
+const FOCUS = { x: 900, y: 560 };
+const LANTERN = [1410, 150];
+const FX = 813;                                  // where the two of them end up
+
+// ---- helpers -------------------------------------------------------------------
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mixc = (a, b, t) => { a = hex(a); b = hex(b); return `rgb(${lerp(a[0], b[0], t) | 0},${lerp(a[1], b[1], t) | 0},${lerp(a[2], b[2], t) | 0})`; };
+const rgba = (h, a) => { const c = hex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
+const wrap = a => ((a % 360) + 540) % 360 - 180;
+const rad = d => d * Math.PI / 180;
+function bez(p0, p1, p2, p3, n) {
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, u = 1 - t;
+    out.push([u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+              u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]]);
+  }
+  return out;
+}
+
+// ---- the evening, as a timeline --------------------------------------------------
+// Two beams 57.6° apart, like an hour hand and a minute hand. They race at
+// first, slow to a stop on the two of them, then settle into the real light's
+// unhurried turn.
+const PERIOD = 3.0, OMEGA = 360 / PERIOD, CALM = 36, GAP = 57.6;
+const PHI_F = Math.acos((FX - LANTERN[0]) / 1600) * 180 / Math.PI;    // beam angle that lands on them
+const Z = []; for (let k = 0; k <= 5; k++) Z.push(2.2 + k * PERIOD);    // beam A reaches them (outward)
+const DECEL = 3, HOLD = 7, ACCEL = 2.5;
+const stopT = Z[5] + DECEL / 2, decelStart = stopT - DECEL, holdEnd = stopT + HOLD;
+const BEND_IN = 1.4, BEND_OUT = 1.3;
+const ENDING = holdEnd + 40;
+
+function phiA(t) {
+  const base = PHI_F - OMEGA * Z[0];
+  if (t < decelStart) return base + OMEGA * t;
+  const a0 = base + OMEGA * decelStart;
+  if (t < stopT) { const u = t - decelStart; return a0 + OMEGA * (u - u * u / (2 * DECEL)); }
+  const ah = a0 + OMEGA * DECEL / 2;
+  if (t < holdEnd) return ah;
+  const u = t - holdEnd;
+  if (u < ACCEL) return ah + CALM * u * u / (2 * ACCEL);
+  return ah + CALM * ACCEL / 2 + CALM * (u - ACCEL);
+}
+const bend = t => t < stopT ? 0 : t < stopT + BEND_IN ? smooth((t - stopT) / BEND_IN) : t < holdEnd - BEND_OUT ? 1 : smooth((holdEnd - t) / BEND_OUT);
+
+// Changes only ever happen while the light is elsewhere.
+const beat = t => Math.floor((t - Z[0] - 2.2) / PERIOD) + 1;
+function pose(t) {
+  if (t > holdEnd + 5.6) return null;
+  if (t > holdEnd + .3) return { kind: 'hold' };
+  if (t > Z[4] + 2.2) return { kind: 'kneel', h: t - stopT };
+  const k = beat(t);
+  if (k < 1) return null;
+  if (k < 3) return { kind: 'walk', u: (t - (Z[0] + 2.2)) / (2 * PERIOD) };
+  if (k === 3) return { kind: 'turn' };
+  return { kind: 'away' };
+}
+const night = t => smooth(t / (holdEnd + 20));
+
+// ---- the land --------------------------------------------------------------------
+// Their rock: a smooth hump in the foreground, across from the car park.
+const humpTop = bez([470, 1100], [500, 820], [600, 705], [760, 694], 30)
+  .concat(bez([760, 694], [880, 686], [970, 700], [1050, 735], 30).slice(1))
+  .concat(bez([1050, 735], [1120, 768], [1160, 900], [1180, 1100], 30).slice(1));
+const hump = new Path2D(); humpTop.forEach(([x, y], i) => i ? hump.lineTo(x, y) : hump.moveTo(x, y)); hump.closePath();
+function topY(x) {
+  for (let i = 0; i < humpTop.length - 1; i++) {
+    const a = humpTop[i], b = humpTop[i + 1];
+    if (x >= a[0] && x <= b[0]) return lerp(a[1], b[1], (x - a[0]) / (b[0] - a[0] || 1));
+  }
+  return 700;
+}
+// The rise the lighthouse stands on.
+const rise = new Path2D();
+rise.moveTo(1120, 640); rise.bezierCurveTo(1200, 600, 1300, 572, 1420, 570);
+rise.bezierCurveTo(1560, 570, 1700, 590, 1800, 640); rise.bezierCurveTo(1860, 670, 1900, 700, 1960, 720); rise.lineTo(1960, 1100); rise.lineTo(1040, 1100); rise.bezierCurveTo(1060, 760, 1090, 670, 1120, 640); rise.closePath();
+
+// The sleeping stone face, lying in the dark to the left, nose to the ground.
+const head = new Path2D();
+head.moveTo(20, 530);
+head.bezierCurveTo(10, 420, 80, 330, 200, 312);
+head.bezierCurveTo(300, 296, 380, 318, 420, 352);
+head.bezierCurveTo(446, 374, 440, 400, 452, 418);
+head.bezierCurveTo(470, 440, 540, 470, 548, 512);
+head.bezierCurveTo(552, 528, 520, 534, 500, 528);
+head.bezierCurveTo(470, 520, 470, 506, 440, 512);
+head.bezierCurveTo(400, 520, 380, 532, 340, 534);
+head.closePath();
+const EYE = [392, 384];
+let HUMP_POCKS = null, HEAD_POCKS = null;   // filled on first frame
+
+// ---- figures ----------------------------------------------------------------------
+const FIG = 52;
+function person(g, x, yF, o) {
+  const h = FIG, f = o.facing, w = h * .2;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  let hipY, shY, headY;
+  if (o.kneel) {
+    hipY = yF - h * .32; shY = yF - h * .64; headY = yF - h * .75;
+    g.lineWidth = w * .44;
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x + f * h * .17, yF - h * .28); g.lineTo(x + f * h * .18, yF); g.stroke();
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x - f * h * .02, yF - 1.2); g.lineTo(x - f * h * .2, yF - 1); g.stroke();
+  } else {
+    hipY = yF - h * .48; shY = yF - h * .79; headY = yF - h * .9;
+    const s = o.stride || 0;
+    g.lineWidth = w * .44;
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x + s * h * .1 + w * .12, yF); g.stroke();
+    g.beginPath(); g.moveTo(x, hipY); g.lineTo(x - s * h * .1 - w * .12, yF); g.stroke();
+  }
+  g.beginPath(); g.ellipse(x + f * .5, (hipY + shY) / 2, w * .58, (hipY - shY) / 2 + 1.5, f * (o.lean || 0), 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(x + f * 1, headY, h * .08, 0, Math.PI * 2); g.fill();
+  g.lineWidth = w * .32;
+  for (const [hx, hy] of o.hands) { g.beginPath(); g.moveTo(x + f * .8, shY + 1.5); g.lineTo(x + hx * h * f, yF + hy * h); g.stroke(); }
+}
+const A = FX - 14, B = FX + 14;                      // her, him
+function pairPeople(p, t) {
+  const down = [[.06, -.5], [-.05, -.5]], out = [];
+  if (p.kind === 'walk') {
+    const x = lerp(610, A, smooth(p.u)), ph = t * 5.5;
+    out.push([x, { facing: 1, stride: Math.sin(ph), hands: down }], [x - 26, { facing: 1, stride: Math.sin(ph + 2.4), hands: down }]);
+  } else if (p.kind === 'turn') {
+    out.push([A, { facing: 1, hands: [[.28, -.92], [.04, -.5]] }], [B, { facing: -1, hands: down }]);
+  } else if (p.kind === 'away') {
+    out.push([A - 4, { facing: -1, hands: [[-.02, -.5], [.12, -.56]], lean: .08 }], [B, { facing: -1, hands: down }]);
+  } else if (p.kind === 'kneel') {
+    const k = smooth((p.h - 2.4) / 1.2);
+    out.push([A, { facing: 1, hands: [[lerp(.05, .07, k), lerp(-.5, -.86, k)], [lerp(-.04, .09, k), lerp(-.5, -.84, k)]] }],
+             [B, { facing: -1, kneel: true, hands: [[.27, -.54], [.07, -.38]] }]);
+  } else if (p.kind === 'hold') {
+    out.push([FX - 6, { facing: 1, hands: [[.2, -.72], [.24, -.62]], lean: .1 }], [FX + 6, { facing: -1, hands: [[.2, -.74], [.22, -.64]], lean: .1 }]);
+  }
+  return out;
+}
+
+// ---- the light ---------------------------------------------------------------------
+// Each beam swings round the lantern. Seen side-on, its far end runs out
+// across the plain and back; where it passes, the ground lights in a band.
+function beamOf(phi) {
+  const c = Math.cos(rad(phi)), s = Math.sin(rad(phi));
+  return { phi, c, s, x: LANTERN[0] + c * 1600, k: Math.pow(Math.abs(c), .6) };
+}
+function lightAt(x, beams, spread = 1) {
+  let I = 0;
+  for (const b of beams) {
+    const w = (70 + Math.abs(b.x - LANTERN[0]) * .09) * spread;
+    I += Math.exp(-Math.pow((x - b.x) / w, 2)) * b.k;
+  }
+  return clamp(I, 0, 1);
+}
+
+// ---- small cast ---------------------------------------------------------------------
+const stars = (() => { const r = rng(91), s = []; for (let i = 0; i < 240; i++) s.push([r() * 2800 - 440, Math.pow(r(), 1.2) * (HORIZON - 30) - 400, r() * .9 + .2, r() * 6, r() < .08 ? 2.4 : 1.4]); return s; })();
+const ants = (() => { const r = rng(3), a = []; for (let i = 0; i < 9; i++) a.push({ u: r(), v: .4 + r() * .8, side: r() }); return a; })();
+const bats = (() => { const r = rng(97), b = []; for (let i = 0; i < 7; i++) b.push({ cx: 500 + r() * 900, cy: 260 + r() * 170, rx: 80 + r() * 160, ry: 20 + r() * 40, sp: .5 + r() * .5, ph: r() * 6 }); return b; })();
+function bat(g, x, y, t, s = 1) {
+  const flap = Math.sin(t * 24) * 3 * s;
+  g.beginPath(); g.moveTo(x - 7 * s, y - flap); g.lineTo(x - 2.5 * s, y + .5 * s); g.lineTo(x, y - 1 * s);
+  g.lineTo(x + 2.5 * s, y + .5 * s); g.lineTo(x + 7 * s, y - flap); g.lineTo(x + 3 * s, y + 2 * s); g.lineTo(x, y + 1.2 * s);
+  g.lineTo(x - 3 * s, y + 2 * s); g.closePath(); g.fill();
+}
+
+// An elephant on impossibly long legs, crossing the horizon all night.
+function elephant(g, x, t, lit) {
+  const feet = COAST + 2, bodyY = 200, ph = t * 1.1;
+  g.save();
+  g.strokeStyle = g.fillStyle;
+  g.lineCap = 'round';
+  // Legs: thin as reeds, jointed once, stepping slowly.
+  const legs = [[-34, 0], [-18, Math.PI], [22, Math.PI * .5], [38, Math.PI * 1.5]];
+  for (const [dx, o] of legs) {
+    const sw = Math.sin(ph + o) * 14, kx = x + dx + sw * .4, ky = lerp(bodyY, feet, .55);
+    g.lineWidth = 2.2; g.beginPath(); g.moveTo(x + dx, bodyY + 18); g.lineTo(kx, ky); g.lineTo(x + dx + sw, feet); g.stroke();
+  }
+  // Body, head, trunk, ears.
+  g.beginPath(); g.ellipse(x, bodyY, 52, 26, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(x - 52, bodyY - 6, 20, 18, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(x - 44, bodyY - 4, 13, 17, .3, 0, Math.PI * 2); g.fill();
+  g.lineWidth = 6; g.beginPath(); g.moveTo(x - 66, bodyY);
+  g.bezierCurveTo(x - 80, bodyY + 20, x - 74, bodyY + 46, x - 86 + Math.sin(t * .8) * 4, bodyY + 60); g.stroke();
+  g.lineWidth = 2; g.beginPath(); g.moveTo(x + 50, bodyY - 4); g.lineTo(x + 60, bodyY + 14); g.stroke();
+  // An obelisk on its back, as in the paintings.
+  g.beginPath(); g.moveTo(x - 12, bodyY - 22); g.lineTo(x + 12, bodyY - 22); g.lineTo(x + 7, bodyY - 74); g.lineTo(x, bodyY - 84); g.lineTo(x - 7, bodyY - 74); g.closePath(); g.fill();
+  if (lit > .02) { g.fillStyle = `rgba(255,236,200,${lit * .6})`; g.beginPath(); g.ellipse(x + 10, bodyY - 8, 30, 10, -.1, 0, Math.PI * 2); g.fill(); }
+  g.restore();
+}
+
+// A smaller elephant follows the first, like a procession.
+function elephantAt(g, x, t, lit, s) {
+  g.save(); g.translate(x, COAST); g.scale(s, s); g.translate(-x, -COAST); elephant(g, x, t, lit); g.restore();
+}
+
+// A giraffe on fire, standing very still at the edge of the world.
+function giraffe(g, x, t, n) {
+  const y = COAST + 1;
+  g.save(); g.lineCap = 'round';
+  g.strokeStyle = g.fillStyle = mixc('#17131c', '#07070d', n);
+  // Sloped back, long legs, a neck reaching up and forward.
+  const sh = [x - 16, y - 74], hp = [x + 20, y - 60], hd = [x - 46, y - 146];
+  g.lineWidth = 2.4;
+  for (const [bx, by, fx] of [[sh[0] - 3, sh[1] + 8, -22], [sh[0] + 5, sh[1] + 9, -12], [hp[0] - 4, hp[1] + 6, 14], [hp[0] + 3, hp[1] + 5, 24]]) {
+    g.beginPath(); g.moveTo(bx, by); g.lineTo(x + fx, y); g.stroke();
+  }
+  g.beginPath(); g.moveTo(sh[0] - 8, sh[1] - 4); g.lineTo(hp[0] + 8, hp[1] - 2); g.lineTo(hp[0] + 6, hp[1] + 8); g.lineTo(sh[0] - 4, sh[1] + 12); g.closePath(); g.fill();
+  g.lineWidth = 7; g.beginPath(); g.moveTo(sh[0] - 4, sh[1] - 2); g.lineTo(hd[0] + 6, hd[1] + 8); g.stroke();
+  g.beginPath(); g.ellipse(hd[0], hd[1] + 6, 10, 5, .5, 0, Math.PI * 2); g.fill();
+  g.lineWidth = 1.5; g.beginPath(); g.moveTo(hd[0] + 4, hd[1]); g.lineTo(hd[0] + 4, hd[1] - 7); g.moveTo(hd[0] + 8, hd[1] + 1); g.lineTo(hd[0] + 9, hd[1] - 6); g.stroke();
+  g.beginPath(); g.moveTo(hp[0] + 8, hp[1]); g.lineTo(hp[0] + 14, hp[1] + 20); g.stroke();
+  // The fire along its back and neck.
+  g.globalCompositeOperation = 'lighter';
+  const glow = g.createRadialGradient(x - 6, y - 64, 0, x - 6, y - 64, 90);
+  glow.addColorStop(0, 'rgba(255,140,60,.22)'); glow.addColorStop(1, 'rgba(255,140,60,0)');
+  g.fillStyle = glow; g.fillRect(x - 100, y - 160, 200, 200);
+  for (let i = 0; i < 7; i++) {
+    const u = i / 6, fx = lerp(x + 20, x - 40, u), fy = u < .5 ? lerp(y - 64, y - 80, u * 2) : lerp(y - 80, y - 132, (u - .5) * 2), h = 14 + 10 * Math.sin(t * 7 + i * 1.7) + (i === 3 ? 8 : 0);
+    const fl = g.createLinearGradient(0, fy, 0, fy - h);
+    fl.addColorStop(0, 'rgba(255,190,90,.95)'); fl.addColorStop(1, 'rgba(255,90,30,0)');
+    g.fillStyle = fl; g.beginPath(); g.moveTo(fx - 4, fy); g.quadraticCurveTo(fx - 3 + Math.sin(t * 5 + i) * 3, fy - h * .6, fx + Math.sin(t * 6 + i) * 4, fy - h);
+    g.quadraticCurveTo(fx + 4, fy - h * .5, fx + 4, fy); g.closePath(); g.fill();
+  }
+  g.restore();
+}
+
+// A girl with a hoop, far off on the plain. She is only there in some flashes,
+// and each time a little nearer.
+const GIRL = [[0, 1090, 512, 15], [2, 900, 530, 19], [4, 690, 552, 24]];
+function girl(g, x, y, h, t) {
+  g.lineCap = 'round';
+  g.beginPath(); g.arc(x, y - h * .9, h * .1, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.moveTo(x, y - h * .8); g.lineTo(x + h * .2, y - h * .3); g.lineTo(x - h * .2, y - h * .3); g.closePath(); g.fill();
+  g.lineWidth = h * .06; g.beginPath(); g.moveTo(x - h * .06, y - h * .3); g.lineTo(x - h * .08, y); g.moveTo(x + h * .06, y - h * .3); g.lineTo(x + h * .1, y); g.stroke();
+  g.beginPath(); g.moveTo(x + h * .05, y - h * .65); g.lineTo(x + h * .38, y - h * .25); g.stroke();
+  g.lineWidth = h * .045; g.beginPath(); g.ellipse(x + h * .55, y - h * .28, h * .26, h * .28, 0, 0, Math.PI * 2); g.stroke();
+}
+
+// Stones that float a little above the plain, their shadows waiting underneath.
+const FLOATERS = [[1030, 320, 44, 22, 590], [610, 262, 22, 12, 566], [1190, 430, 15, 8, 620], [160, 236, 30, 14, 548]];
+function floater(g, x, y, rx, ry, n) {
+  const fg = g.createLinearGradient(0, y - ry, 0, y + ry);
+  fg.addColorStop(0, mixc('#8c7a64', '#3a3440', n)); fg.addColorStop(1, '#100e16');
+  g.fillStyle = fg; g.beginPath(); g.moveTo(x - rx, y);
+  g.bezierCurveTo(x - rx, y - ry * 1.3, x + rx * .8, y - ry * 1.4, x + rx, y - ry * .1);
+  g.bezierCurveTo(x + rx * 1.05, y + ry * .9, x - rx * .2, y + ry * 1.2, x - rx, y); g.fill();
+}
+
+// Pebbles scattered on the plain; the light gives each one a long shadow.
+const PEBBLES = (() => { const r = rng(41), a = []; for (let i = 0; i < 46; i++) { const y = 590 + Math.pow(r(), 1.4) * 470; a.push([r() * 2200 - 140, y, (2 + r() * 5) * (0.5 + (y - 560) / 400)]); } return a; })();
+
+// The pocked rock of the cape: tafoni, the hollows the wind cuts.
+const probeCtx = document.createElement('canvas').getContext('2d');
+function pocks(path, x0, x1, y0, y1, count, seed) {
+  const r = rng(seed), out = [];
+  for (let i = 0; i < count * 8 && out.length < count; i++) {
+    const x = lerp(x0, x1, r()), y = lerp(y0, y1, r());
+    if (probeCtx.isPointInPath(path, x, y) && probeCtx.isPointInPath(path, x, y - 14) && probeCtx.isPointInPath(path, x, y + 14)) out.push([x, y, 4 + r() * 13]);
+  }
+  return out;
+}
+function drawPocks(g, list, n) {
+  for (const [x, y, s] of list) {
+    g.fillStyle = 'rgba(4,3,8,.32)'; g.beginPath(); g.ellipse(x, y, s, s * .62, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = mixc('#8a7058', '#3a3440', n); g.globalAlpha = .28; g.lineWidth = 1.2;
+    g.beginPath(); g.ellipse(x, y + 1, s, s * .62, 0, .15 * Math.PI, .85 * Math.PI); g.stroke(); g.globalAlpha = 1;
+  }
+}
+
+// The car park: a pale slab, one car melting over the kerb, and theirs.
+function carShape(g, x, y, f, s = 1) {
+  g.beginPath();
+  g.moveTo(x - 46 * s, y); g.lineTo(x - 46 * s, y - 14 * s); g.lineTo(x - 26 * s * f, y - 16 * s);
+  g.lineTo(x - 14 * s * f, y - 30 * s); g.lineTo(x + 16 * s * f, y - 30 * s); g.lineTo(x + 30 * s * f, y - 16 * s);
+  g.lineTo(x + 46 * s, y - 14 * s); g.lineTo(x + 46 * s, y); g.closePath(); g.fill();
+}
+// Their car: white, low, a smooth fastback with a thin bar of light at the nose.
+function tesla(g, x, y, n, lit) {
+  g.save();
+  const body = new Path2D();
+  body.moveTo(x - 50, y - 7); body.lineTo(x - 51, y - 17); body.quadraticCurveTo(x - 49, y - 21, x - 42, y - 22);
+  body.bezierCurveTo(x - 30, y - 36, x - 4, y - 38, x + 8, y - 31);
+  body.quadraticCurveTo(x + 18, y - 24, x + 30, y - 21); body.quadraticCurveTo(x + 48, y - 18, x + 51, y - 12);
+  body.lineTo(x + 50, y - 6); body.closePath();
+  const bg = g.createLinearGradient(0, y - 38, 0, y - 4);
+  bg.addColorStop(0, mixc('#e9e6e0', '#8a8894', n)); bg.addColorStop(1, mixc('#8f8a86', '#3a3a46', n));
+  g.fillStyle = bg; g.fill(body);
+  if (lit > .02) { g.fillStyle = `rgba(255,246,230,${lit * .5})`; g.fill(body); }
+  // One dark sweep of glass.
+  g.fillStyle = 'rgba(10,12,22,.85)'; g.beginPath(); g.moveTo(x - 38, y - 23); g.bezierCurveTo(x - 28, y - 33, x - 6, y - 35, x + 5, y - 29);
+  g.quadraticCurveTo(x + 12, y - 25, x + 14, y - 23); g.closePath(); g.fill();
+  // Wheels.
+  g.fillStyle = '#060509';
+  for (const wx of [x - 31, x + 31]) { g.beginPath(); g.arc(wx, y - 6, 7.5, 0, Math.PI * 2); g.fill(); }
+  g.restore();
+}
+
+function meltedCar(g) {
+  // Its back half sags over the kerb and pours down the face of the slab.
+  g.beginPath();
+  g.moveTo(258, 590); g.lineTo(258, 572); g.lineTo(280, 570); g.lineTo(292, 556); g.lineTo(326, 556); g.lineTo(338, 570);
+  g.bezierCurveTo(352, 572, 360, 580, 364, 596);
+  g.bezierCurveTo(368, 616, 362, 642, 372, 668);
+  g.bezierCurveTo(376, 680, 360, 684, 356, 668);
+  g.bezierCurveTo(350, 640, 346, 618, 336, 606);
+  g.lineTo(300, 600); g.lineTo(258, 600); g.closePath(); g.fill();
+}
+
+// The soft clock, draped over a stone in the foreground. Its hands are the beams.
+function clock(g, phA, phB, lit, n) {
+  // The stone it hangs from.
+  const sg = g.createLinearGradient(0, 880, 0, 1010);
+  sg.addColorStop(0, mixc('#3a2a24', '#1d1514', n)); sg.addColorStop(1, '#0b0909');
+  g.fillStyle = sg; g.beginPath(); g.moveTo(160, 1100); g.lineTo(170, 900); g.bezierCurveTo(200, 880, 320, 876, 380, 892);
+  g.lineTo(392, 1100); g.closePath(); g.fill();
+  // The face: a disc gone soft, folded over the stone's edge.
+  const face = new Path2D();
+  face.moveTo(200, 896); face.bezierCurveTo(196, 846, 300, 830, 352, 860);
+  face.bezierCurveTo(380, 876, 386, 896, 384, 912);
+  face.bezierCurveTo(390, 950, 396, 990, 378, 1018);
+  face.bezierCurveTo(364, 1036, 350, 1006, 352, 980);
+  face.bezierCurveTo(354, 950, 340, 920, 300, 914);
+  face.bezierCurveTo(260, 910, 210, 920, 200, 896); face.closePath();
+  const fg = g.createLinearGradient(200, 840, 360, 1020);
+  fg.addColorStop(0, mixc('#7f8aa0', '#3a4258', n)); fg.addColorStop(.6, mixc('#5b6580', '#2a3044', n)); fg.addColorStop(1, '#14182a');
+  g.fillStyle = fg; g.fill(face);
+  if (lit > .02) { g.fillStyle = `rgba(255,240,214,${lit * .55})`; g.fill(face); }
+  g.strokeStyle = mixc('#c9a35a', '#6a5636', n); g.lineWidth = 3; g.stroke(face);
+  // Hour marks, squashed by the fold.
+  const cx = 290, cy = 878;
+  g.fillStyle = 'rgba(16,16,28,.7)';
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; g.fillRect(cx + Math.cos(a) * 62 - 1.5, cy + Math.sin(a) * 26 * (Math.sin(a) > 0 ? 1.6 : 1) - 1.5, 3, 3); }
+  // Hands.
+  g.strokeStyle = 'rgba(12,12,22,.9)'; g.lineCap = 'round';
+  for (const [ph, len, w] of [[phA, 54, 2.4], [phB, 36, 3.6]]) {
+    const a = rad(ph);
+    g.lineWidth = w; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len * .42); g.stroke();
+  }
+  g.fillStyle = 'rgba(12,12,22,.9)'; g.beginPath(); g.arc(cx, cy, 3.5, 0, Math.PI * 2); g.fill();
+  // Ants, gathered on the face as they gather on his watches.
+  g.fillStyle = '#07060a';
+  for (let i = 0; i < 11; i++) {
+    const a = i * .57 + performance.now() * 0 + (i % 3) * .2, rr = 22 + (i % 4) * 7, x = cx - 30 + Math.cos(a) * rr * 1.1, y = cy + 14 + Math.sin(a) * rr * .35;
+    g.beginPath(); g.ellipse(x, y, 2.4, 1.1, a, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(x + Math.cos(a) * 3, y + Math.sin(a) * 1.4, 1, 0, Math.PI * 2); g.fill();
+  }
+  // The little winding knob.
+  g.fillStyle = fg; g.beginPath(); g.ellipse(196, 880, 8, 6, -.4, 0, Math.PI * 2); g.fill();
+}
+
+// The lighthouse, taller than it is, propped on a crutch where it has gone soft.
+function lighthouse(g, n, glow) {
+  const wall = mixc('#cfc4ae', '#6a6a78', n), shade = mixc('#9a8f80', '#3e3f4e', n), dark = mixc('#2a2430', '#0e0f18', n);
+  // House.
+  g.fillStyle = wall; g.fillRect(1290, 512, 250, 66);
+  g.fillStyle = shade; g.fillRect(1290, 512, 250, 9); g.fillRect(1500, 521, 40, 57);
+  g.fillStyle = dark; for (const x of [1310, 1346, 1460]) { g.beginPath(); g.roundRect(x, 534, 18, 30, [9, 9, 0, 0]); g.fill(); }
+  // Tower: square, long, with a soft swelling on its side.
+  const tg = g.createLinearGradient(1384, 0, 1436, 0);
+  tg.addColorStop(0, wall); tg.addColorStop(.7, wall); tg.addColorStop(1, shade);
+  g.fillStyle = tg;
+  g.beginPath(); g.moveTo(1384, 514); g.lineTo(1388, 176); g.lineTo(1432, 176); g.lineTo(1436, 300);
+  g.bezierCurveTo(1480, 312, 1490, 360, 1468, 384);
+  g.bezierCurveTo(1450, 400, 1436, 392, 1436, 420);
+  g.lineTo(1436, 514); g.closePath(); g.fill();
+  g.fillStyle = dark; g.fillRect(1402, 250, 12, 22); g.fillRect(1402, 420, 12, 22);
+  g.fillStyle = shade; g.fillRect(1380, 170, 60, 8);
+  // Lantern.
+  g.fillStyle = dark; g.fillRect(1392, 162, 36, 8); g.fillRect(1406, 116, 8, 6);
+  g.beginPath(); g.moveTo(1394, 132); g.quadraticCurveTo(1410, 108, 1426, 132); g.closePath(); g.fill();
+  g.fillStyle = `rgb(255,${236 + glow * 14 | 0},${206 + glow * 40 | 0})`; g.fillRect(1397, 133, 26, 29);
+  // The crutch, its fork under the soft part.
+  g.strokeStyle = mixc('#8a6a48', '#3a2c22', n); g.lineCap = 'round';
+  g.lineWidth = 5; g.beginPath(); g.moveTo(1560, 584); g.lineTo(1500, 398); g.stroke();
+  g.lineWidth = 4; g.beginPath(); g.moveTo(1500, 398); g.lineTo(1482, 382); g.moveTo(1500, 398); g.lineTo(1512, 376); g.stroke();
+  g.lineWidth = 7; g.beginPath(); g.moveTo(1476, 378); g.quadraticCurveTo(1496, 368, 1518, 372); g.stroke();
+}
+
+// ---- canvas & frame -------------------------------------------------------------------
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let DPR = 1, cw = 0, ch = 0, view = { s: 1, ox: 0, oy: 0 }, grain, vignette;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const vw = innerWidth, vh = innerHeight;
+  cw = cv.width = Math.round(vw * DPR); ch = cv.height = Math.round(vh * DPR);
+  const s = Math.min(Math.max(vw / W, vh / H), vw / 1300);
+  view = { s, ox: vw / 2 - FOCUS.x * s, oy: vh / 2 - FOCUS.y * s };
+  vignette = document.createElement('canvas'); vignette.width = cw; vignette.height = ch;
+  const vg = vignette.getContext('2d'), rg = vg.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * .35, cw / 2, ch / 2, Math.hypot(cw, ch) * .62);
+  rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(1, 'rgba(0,0,6,.55)');
+  vg.fillStyle = rg; vg.fillRect(0, 0, cw, ch);
+}
+function makeGrain() {
+  const c = document.createElement('canvas'); c.width = c.height = 160;
+  const g = c.getContext('2d'), d = g.createImageData(160, 160), r = rng(5);
+  for (let i = 0; i < d.data.length; i += 4) { const v = r() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0); return c;
+}
+
+function shadow(g, x, y, w, len, a, dir) {
+  // A long, hard, flat shadow running away from the light, as in the paintings.
+  if (a < .02) return;
+  g.fillStyle = `rgba(4,3,10,${a})`;
+  g.beginPath(); g.moveTo(x - w / 2, y); g.lineTo(x + dir * len, y + 3); g.lineTo(x + dir * len, y + 7); g.lineTo(x + w / 2, y + 2); g.closePath(); g.fill();
+}
+
+function frame(t) {
+  if (!HUMP_POCKS) { HUMP_POCKS = pocks(hump, 520, 1140, 730, 1060, 13, 8); HEAD_POCKS = pocks(head, 40, 520, 330, 520, 7, 9); }
+  const n = night(t), b = bend(t), p = pose(t);
+  const pa = phiA(t), beams = [beamOf(pa), beamOf(pa - GAP)];
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.setTransform(view.s * DPR, 0, 0, view.s * DPR, view.ox * DPR, view.oy * DPR);
+
+  // Sky: deep blue overhead, an eerie green-gold glow along the sea.
+  const sky = ctx.createLinearGradient(0, -400, 0, HORIZON);
+  sky.addColorStop(0, '#04061a'); sky.addColorStop(.55, mixc('#142057', '#0a1036', n));
+  sky.addColorStop(.86, mixc('#3c5a7e', '#1a2848', n)); sky.addColorStop(.96, mixc('#b7b98e', '#4a5464', n)); sky.addColorStop(1, mixc('#e6cf96', '#6c6a6a', n));
+  ctx.fillStyle = sky; ctx.fillRect(-2000, -2000, 6000, 2000 + HORIZON);
+  ctx.fillStyle = '#fff6e6';
+  for (const [x, y, br, ph, sz] of stars) { ctx.globalAlpha = clamp(.35 + n * .8, 0, 1) * br * (.7 + .3 * Math.sin(t * 1.4 + ph)); ctx.fillRect(x, y, sz, sz); }
+  ctx.globalAlpha = 1;
+  // Thin bars of cloud low in the glow.
+  ctx.fillStyle = mixc('#8a8a74', '#2c3446', n);
+  for (const [x, y, w, h] of [[120, 404, 520, 3], [820, 396, 380, 2], [1500, 410, 600, 3], [300, 420, 900, 1.5]]) ctx.fillRect(x + Math.sin(t * .05) * 20, y, w, h);
+
+  // Sea, with a rock hanging in the air above it and its shadow on the water.
+  const sea = ctx.createLinearGradient(0, HORIZON, 0, COAST + 10);
+  sea.addColorStop(0, mixc('#8b8f7c', '#2c3140', n)); sea.addColorStop(1, mixc('#2a3448', '#0d1220', n));
+  ctx.fillStyle = sea; ctx.fillRect(-2000, HORIZON, 6000, 60);
+  const fy = 380 + Math.sin(t * .4) * 4;
+  ctx.fillStyle = 'rgba(0,0,8,.4)'; ctx.beginPath(); ctx.ellipse(1720, 458, 70, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const rk = ctx.createLinearGradient(0, fy - 30, 0, fy + 26);
+  rk.addColorStop(0, mixc('#8a7864', '#3c3640', n)); rk.addColorStop(1, '#14121c');
+  ctx.fillStyle = rk; ctx.beginPath(); ctx.moveTo(1650, fy); ctx.bezierCurveTo(1660, fy - 34, 1730, fy - 44, 1786, fy - 8);
+  ctx.bezierCurveTo(1790, fy + 10, 1740, fy + 30, 1700, fy + 24); ctx.bezierCurveTo(1676, fy + 20, 1650, fy + 12, 1650, fy); ctx.fill();
+
+  // The plain: ochre where it meets the glow, umber and then black toward us.
+  const plain = ctx.createLinearGradient(0, COAST, 0, H);
+  plain.addColorStop(0, mixc('#5c4a3a', '#262230', n)); plain.addColorStop(.25, mixc('#2e241f', '#141218', n)); plain.addColorStop(1, '#07060a');
+  ctx.fillStyle = plain; ctx.fillRect(-2000, COAST, 6000, 3000);
+  // Faint strata lines receding.
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
+  for (let i = 1; i < 12; i++) { const y = COAST + Math.pow(i / 12, 2.2) * 600; ctx.beginPath(); ctx.moveTo(-2000, y); ctx.lineTo(4000, y); ctx.stroke(); }
+
+  // The burning giraffe, and the elephants walking left all night.
+  giraffe(ctx, 975, t, n);
+  const ex = 1700 - t * 20, ex2 = ex + 430;
+  ctx.fillStyle = mixc('#14121e', '#06070e', n); elephant(ctx, ex, t, lightAt(ex, beams) * .8);
+  ctx.fillStyle = mixc('#1a1724', '#08080f', n); elephantAt(ctx, ex2, t + 1.3, lightAt(ex2, beams) * .8, .58);
+
+  // Floating stones, and their shadows on the ground.
+  for (const [x, y, rx, ry, gy] of FLOATERS) {
+    const by = y + Math.sin(t * .5 + x) * 5;
+    ctx.fillStyle = 'rgba(2,2,8,.45)'; ctx.beginPath(); ctx.ellipse(x, gy, rx * .9, rx * .12, 0, 0, Math.PI * 2); ctx.fill();
+    floater(ctx, x, by, rx, ry, n);
+    const fl = lightAt(x, beams);
+    if (fl > .05) { ctx.fillStyle = `rgba(255,236,206,${fl * .35})`; ctx.beginPath(); ctx.ellipse(x - rx * .1, by - ry * .5, rx * .7, ry * .5, 0, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  // Pebbles, each throwing a shadow away from the light as it passes.
+  for (const [x, y, r] of PEBBLES) {
+    const I = lightAt(x, beams);
+    shadow(ctx, x, y + r * .3, r * 1.4, 30 + I * 220 * (r / 6), .6 * I, Math.sign(x - LANTERN[0]) || -1);
+    ctx.fillStyle = mixc('#1a1416', '#e8dcc6', I * .7); ctx.beginPath(); ctx.ellipse(x, y, r, r * .5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // The girl with the hoop.
+  const kNow = beat(t);
+  for (const [k, gx, gy, gh] of GIRL) {
+    if (kNow !== k || t > stopT) continue;
+    const I = lightAt(gx, beams, 1.3);
+    if (I < .03) continue;
+    shadow(ctx, gx, gy, gh * .3, gh * 10 * I, .6 * I, -1);
+    ctx.fillStyle = ctx.strokeStyle = mixc('#0c0a10', '#f4ead8', I); girl(ctx, gx, gy, gh, t);
+  }
+
+  // The sleeping head.
+  const hg = ctx.createLinearGradient(0, 300, 0, 535);
+  hg.addColorStop(0, mixc('#6a5848', '#2c2834', n)); hg.addColorStop(.5, mixc('#3c3029', '#181620', n)); hg.addColorStop(1, '#0c0a10');
+  ctx.fillStyle = hg; ctx.fill(head);
+  const hl = lightAt(300, beams, 2.2);
+  if (hl > .02) { ctx.fillStyle = `rgba(255,236,206,${hl * .4})`; ctx.fill(head); }
+  drawPocks(ctx, HEAD_POCKS, n);
+  ctx.strokeStyle = mixc('#c9b48c', '#5a5660', n); ctx.lineWidth = 1.6; ctx.globalAlpha = .55;
+  ctx.beginPath(); ctx.moveTo(60, 400); ctx.bezierCurveTo(100, 340, 200, 312, 300, 306); ctx.stroke(); ctx.globalAlpha = 1;
+  // Its eye: closed all night, until the light stops.
+  const open = b;
+  ctx.save(); ctx.translate(EYE[0], EYE[1]);
+  if (open > .05) {
+    ctx.fillStyle = '#e8dfcc'; ctx.beginPath(); ctx.ellipse(0, 0, 18, 9 * open, -.15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0b0a12'; ctx.beginPath(); ctx.arc(8, 1, 5 * open, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.strokeStyle = '#0b0a12'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.ellipse(0, 0, 18, 9 * Math.max(open, .08), -.15, 0, Math.PI); ctx.stroke();
+  if (open < .5) for (let i = -3; i <= 3; i++) { const a = Math.PI / 2 + i * .32; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 18, Math.sin(a) * 4); ctx.lineTo(Math.cos(a) * 24, Math.sin(a) * 4 + 9); ctx.stroke(); }
+  ctx.restore();
+  // Ants on its cheek.
+  ctx.fillStyle = '#050408';
+  for (const a of ants) {
+    const u = (a.u + t * .012 * a.v) % 1, x = lerp(300, 450, u), y = 440 + Math.sin(u * 9 + a.side * 6) * 14 + a.side * 30;
+    ctx.beginPath(); ctx.ellipse(x, y, 2.6, 1.2, Math.sin(u * 9), 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 3, y, 1, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Car park: a pale slab in the dark.
+  const cpl = lightAt(500, beams, 2.4);
+  ctx.fillStyle = mixc('#4a4440', '#1e1c22', n);
+  ctx.beginPath(); ctx.moveTo(200, 600); ctx.lineTo(780, 600); ctx.lineTo(740, 572); ctx.lineTo(240, 572); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = mixc('#2a2424', '#100e12', n); ctx.fillRect(200, 600, 580, 70);
+  if (cpl > .02) { ctx.fillStyle = `rgba(255,236,206,${cpl * .35})`; ctx.fillRect(200, 572, 580, 98); }
+  ctx.strokeStyle = 'rgba(220,210,190,.18)'; ctx.lineWidth = 1.5;
+  for (let x = 300; x < 760; x += 60) { ctx.beginPath(); ctx.moveTo(x, 576); ctx.lineTo(x - 8, 598); ctx.stroke(); }
+  ctx.fillStyle = mixc('#5a4c48', '#1a1820', n); meltedCar(ctx);
+  // Their car comes in along the road with its lights on, parks, goes dark.
+  const carIn = smooth(t / 2.6), carX = lerp(-260, 600, carIn);
+  {
+    const lightsOn = t < Z[0] + 2;
+    tesla(ctx, carX, 596, n, lightAt(carX, beams, 1.4));
+    if (lightsOn) {
+      ctx.globalCompositeOperation = 'lighter';
+      const hb = ctx.createLinearGradient(carX + 40, 0, carX + 420, 0);
+      hb.addColorStop(0, 'rgba(255,236,196,.35)'); hb.addColorStop(1, 'rgba(255,236,196,0)');
+      ctx.fillStyle = hb; ctx.beginPath(); ctx.moveTo(carX + 48, 580); ctx.lineTo(carX + 420, 560); ctx.lineTo(carX + 420, 612); ctx.lineTo(carX + 48, 584); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,248,236,.95)'; ctx.fillRect(carX + 38, 580.5, 13, 1.8);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  // The rise and the lighthouse.
+  const rg = ctx.createLinearGradient(0, 570, 0, 1000);
+  rg.addColorStop(0, mixc('#3a2e28', '#1a1720', n)); rg.addColorStop(.25, mixc('#1e1816', '#0e0c10', n)); rg.addColorStop(1, '#060508');
+  ctx.fillStyle = rg; ctx.fill(rise);
+  let glare = 0;
+  for (const bm of beams) if (bm.s > 0) glare = Math.max(glare, Math.pow(bm.s, 16));
+  lighthouse(ctx, n, glare);
+
+  // A dead olive branch, and the moon gone soft over it.
+  ctx.strokeStyle = '#08070b'; ctx.lineCap = 'round';
+  for (const [pts, w] of [[[[1850, 1100], [1840, 960], [1800, 860], [1790, 790]], 16], [[[1792, 800], [1760, 770], [1720, 760], [1660, 768]], 7], [[[1795, 812], [1830, 770], [1860, 760], [1890, 730]], 5]]) {
+    ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.bezierCurveTo(...pts[1], ...pts[2], ...pts[3]); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  const mg = ctx.createRadialGradient(1712, 780, 0, 1712, 780, 120);
+  mg.addColorStop(0, 'rgba(240,230,190,.18)'); mg.addColorStop(1, 'rgba(240,230,190,0)');
+  ctx.fillStyle = mg; ctx.fillRect(1590, 660, 240, 240);
+  ctx.globalCompositeOperation = 'source-over';
+  const moon = ctx.createLinearGradient(1680, 730, 1740, 840);
+  moon.addColorStop(0, '#f2ead0'); moon.addColorStop(1, '#a89c80');
+  ctx.fillStyle = moon; ctx.beginPath();
+  ctx.moveTo(1672, 768); ctx.bezierCurveTo(1676, 732, 1748, 726, 1756, 764);
+  ctx.bezierCurveTo(1760, 786, 1744, 800, 1740, 826); ctx.bezierCurveTo(1736, 850, 1716, 846, 1718, 820);
+  ctx.bezierCurveTo(1720, 798, 1700, 788, 1690, 800); ctx.bezierCurveTo(1680, 812, 1668, 790, 1672, 768); ctx.fill();
+  ctx.fillStyle = 'rgba(120,110,90,.35)';
+  for (const [x, y, r] of [[1700, 752, 6], [1728, 770, 4], [1744, 808, 3]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+
+  // Bats, while it's still uneasy.
+  if (t > Z[1] && t < stopT) {
+    ctx.fillStyle = '#05050c';
+    for (const bt of bats) { const a = t * bt.sp + bt.ph; bat(ctx, bt.cx + Math.cos(a) * bt.rx + Math.sin(a * 2.7) * 20, bt.cy + Math.sin(a * 1.3) * bt.ry, t + bt.ph, 1.1); }
+  }
+
+  // The light, in the air: two hard-edged beams.
+  ctx.globalCompositeOperation = 'lighter';
+  for (const [i, bm] of beams.entries()) {
+    const fade = i === 0 ? 1 - b : 1;
+    if (bm.k * fade < .02) continue;
+    const end = [bm.x, LANTERN[1] + 30 * Math.abs(bm.c) + 40 * bm.s];
+    const d = Math.hypot(end[0] - LANTERN[0], end[1] - LANTERN[1]) || 1, nx = -(end[1] - LANTERN[1]) / d, ny = (end[0] - LANTERN[0]) / d, w = 6 + d * .06;
+    const gr = ctx.createLinearGradient(LANTERN[0], LANTERN[1], end[0], end[1]);
+    gr.addColorStop(0, `rgba(255,246,226,${.28 * bm.k * fade})`); gr.addColorStop(1, `rgba(255,246,226,${.04 * bm.k * fade})`);
+    ctx.fillStyle = gr; ctx.beginPath();
+    ctx.moveTo(LANTERN[0] + nx * 4, LANTERN[1] + ny * 4); ctx.lineTo(end[0] + nx * w, end[1] + ny * w);
+    ctx.lineTo(end[0] - nx * w, end[1] - ny * w); ctx.lineTo(LANTERN[0] - nx * 4, LANTERN[1] - ny * 4); ctx.closePath(); ctx.fill();
+    // Its light running over the ground beneath.
+    const bw = (70 + Math.abs(bm.x - LANTERN[0]) * .09) * 1.6, wash = ctx.createLinearGradient(bm.x - bw, 0, bm.x + bw, 0);
+    wash.addColorStop(0, 'rgba(255,236,206,0)'); wash.addColorStop(.5, `rgba(255,236,206,${.13 * bm.k * fade})`); wash.addColorStop(1, 'rgba(255,236,206,0)');
+    ctx.fillStyle = wash; ctx.fillRect(bm.x - bw, COAST, bw * 2, H - COAST + 400);
+  }
+  // The bend: the beam sags out of the sky like something soft, and lays itself down on them.
+  if (b > .001) {
+    const P0 = LANTERN, P3 = [FX, topY(FX) - 30], P1 = [LANTERN[0] - 420, LANTERN[1] + 10], P2 = [lerp(FX + 400, FX + 40, b), lerp(LANTERN[1] + 40, P3[1] - 260, b)];
+    const end = [lerp(LANTERN[0] - 900, P3[0], b), lerp(LANTERN[1] + 60, P3[1], b)];
+    const pts = bez(P0, P1, P2, end, 48), left = [], right = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], c = pts[Math.min(pts.length - 1, i + 1)], dx = c[0] - a[0], dy = c[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      const w = 4 + (i / (pts.length - 1)) * 46 * (0.6 + .4 * b);
+      left.push([pts[i][0] - dy / l * w, pts[i][1] + dx / l * w]); right.push([pts[i][0] + dy / l * w, pts[i][1] - dx / l * w]);
+    }
+    ctx.fillStyle = `rgba(255,246,226,${.26 * b})`;
+    ctx.beginPath(); left.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(...right[i]); ctx.closePath(); ctx.fill();
+    // A pool on the rock around them.
+    const pool = ctx.createRadialGradient(FX, topY(FX), 0, FX, topY(FX), 120);
+    pool.addColorStop(0, `rgba(255,240,214,${.4 * b})`); pool.addColorStop(1, 'rgba(255,240,214,0)');
+    ctx.fillStyle = pool; ctx.save(); ctx.translate(FX, topY(FX)); ctx.scale(1, .45); ctx.translate(-FX, -topY(FX)); ctx.fillRect(FX - 120, topY(FX) - 120, 240, 240); ctx.restore();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Their rock.
+  const hgr = ctx.createLinearGradient(0, 690, 0, 1000);
+  hgr.addColorStop(0, mixc('#4a3a30', '#221c22', n)); hgr.addColorStop(.3, mixc('#261d1a', '#120e12', n)); hgr.addColorStop(1, '#050407');
+  ctx.fillStyle = hgr; ctx.fill(hump);
+  const hlx = lightAt(FX, beams);
+  const humpLit = Math.max(hlx, b);
+  if (humpLit > .02) {
+    const hl2 = ctx.createRadialGradient(FX, 700, 0, FX, 700, 320);
+    hl2.addColorStop(0, `rgba(255,236,206,${humpLit * .32})`); hl2.addColorStop(1, 'rgba(255,236,206,0)');
+    ctx.save(); ctx.clip(hump); ctx.fillStyle = hl2; ctx.fillRect(FX - 340, 680, 680, 400); ctx.restore();
+  }
+  drawPocks(ctx, HUMP_POCKS, n);
+  ctx.strokeStyle = mixc('#a48a68', '#4a4250', n); ctx.lineWidth = 1.4; ctx.globalAlpha = .5;
+  ctx.beginPath(); humpTop.slice(8, 70).forEach(([x, y], i) => i ? ctx.lineTo(x, y + 1) : ctx.moveTo(x, y + 1)); ctx.stroke(); ctx.globalAlpha = 1;
+
+  // The two of them, and the long shadows the light throws from them.
+  if (p) {
+    const people = pairPeople(p, t);
+    for (const [x, o] of people) {
+      const I = Math.max(lightAt(x, beams), b), dir = Math.sign(x - LANTERN[0]) || -1, yF = topY(x);
+      shadow(ctx, x, yF, 8, 140 + I * 380, .7 * I, dir);
+    }
+    for (const [x, o] of people) {
+      const I = Math.max(lightAt(x, beams), b);
+      ctx.fillStyle = ctx.strokeStyle = mixc('#140f12', '#fff4e2', I); person(ctx, x, topY(x), o);
+    }
+  }
+  // One bat goes straight through the light while she turns to him.
+  if (t > Z[3] - .3 && t < Z[3] + 1.6) {
+    const u = (t - Z[3] + .3) / 1.9, bx = lerp(980, 640, u), by = 600 + Math.sin(u * 8) * 16;
+    ctx.fillStyle = mixc('#0a0a10', '#f2eadc', lightAt(bx, beams)); bat(ctx, bx, by, t, 1.8);
+  }
+  // After they've gone: an egg, where they stood.
+  const eggA = smooth((t - (holdEnd + 7.2)) / 2);
+  if (eggA > 0) {
+    const ey = topY(FX), eI = Math.max(lightAt(FX, beams), .25);
+    shadow(ctx, FX, ey, 14, 120 + eI * 260, .5 * eI * eggA, -1);
+    const eg = ctx.createRadialGradient(FX - 5, ey - 24, 2, FX, ey - 16, 22);
+    eg.addColorStop(0, `rgba(255,250,240,${eggA})`); eg.addColorStop(1, `rgba(${lerp(90, 210, eI) | 0},${lerp(84, 196, eI) | 0},${lerp(90, 180, eI) | 0},${eggA})`);
+    ctx.fillStyle = eg; ctx.beginPath(); ctx.ellipse(FX, ey - 15, 11, 15, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // The soft clock in the foreground; its hands are the beams.
+  clock(ctx, pa - 90, pa - GAP - 90, lightAt(290, beams, 2), n);
+
+  // The lantern's glare when a beam turns toward us.
+  ctx.globalCompositeOperation = 'lighter';
+  const gl = ctx.createRadialGradient(LANTERN[0], LANTERN[1], 0, LANTERN[0], LANTERN[1], 34 + glare * 150);
+  gl.addColorStop(0, `rgba(255,244,222,${.6 + glare * .4})`); gl.addColorStop(.25, `rgba(255,236,206,${.16 + glare * .3})`); gl.addColorStop(1, 'rgba(255,236,206,0)');
+  ctx.fillStyle = gl; ctx.fillRect(LANTERN[0] - 200, LANTERN[1] - 200, 400, 400);
+  // The ring, while the light waits on them.
+  if (p && p.kind === 'kneel' && b > .6) {
+    const gx = B - FIG * .27, gy = topY(B) - FIG * .54, a = (b - .6) / .4 * (.6 + .4 * Math.sin(t * 3.1));
+    const rr = ctx.createRadialGradient(gx, gy, 0, gx, gy, 7);
+    rr.addColorStop(0, `rgba(255,252,240,${a})`); rr.addColorStop(1, 'rgba(255,252,240,0)');
+    ctx.fillStyle = rr; ctx.fillRect(gx - 7, gy - 7, 14, 14);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Varnish and grain.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = .07; ctx.globalCompositeOperation = 'overlay';
+  ctx.fillStyle = ctx.createPattern(grain, 'repeat');
+  const gx = (Math.random() * 160) | 0, gy = (Math.random() * 160) | 0;
+  ctx.translate(gx, gy); ctx.fillRect(-gx, -gy, cw, ch); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(vignette, 0, 0);
+}
+
+// ---- sound: a warm, wobbly little tape of music, with the sea underneath ------------
+// One bar per turn of the light (80 bpm, a bar every 3 s). Detuned pads, a soft
+// dusty beat, chimes. When the beam bends, the tape sags, and a chord blooms.
+let ac, master, seaBus, tape, muted = false, a0 = 0, nextBar = 0, timer = null;
+const BAR = PERIOD, BEAT = BAR / 4;
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const CHORDS = [
+  [50, 57, 61, 66],          // Dmaj7
+  [47, 54, 57, 61, 62],      // Bm9
+  [43, 50, 54, 59],          // Gmaj7
+  [45, 52, 59, 61, 66],      // Asus2 with a sixth
+];
+const BLOOM = [43, 50, 54, 57, 59, 66];   // Gmaj9, wide open
+// Music time: bar k starts at story time Z[0] + (k - 1) * BAR.
+const barTime = k => Z[0] + (k - 1) * BAR;
+const stopBar = Math.floor((stopT - Z[0]) / BAR) + 1, holdBars = Math.ceil(HOLD / BAR);
+
+function startSound() {
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  a0 = ac.currentTime + .05;
+  const sr = ac.sampleRate, len = sr * 4;
+  const whiteB = ac.createBuffer(1, len, sr), brownB = ac.createBuffer(1, len, sr);
+  const w = whiteB.getChannelData(0), br = brownB.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) { const x = Math.random() * 2 - 1; w[i] = x; last = (last + .02 * x) / 1.02; br[i] = last * 3.5; }
+  ac._white = whiteB;
+  const loop = buf => { const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; s.start(0, Math.random() * 3); return s; };
+  const filt = (type, f, q) => { const x = ac.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = q || .7; return x; };
+  const gain = v => { const g = ac.createGain(); g.gain.value = v; return g; };
+  ac._filt = filt; ac._gain = gain;
+
+  master = gain(0); master.gain.setTargetAtTime(.85, ac.currentTime, 1.2);
+  const warm = filt('lowpass', 3600, .5), comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -20; comp.ratio.value = 3;
+  master.connect(warm).connect(comp).connect(ac.destination);
+
+  // Tape: every pitched voice listens to this for its wobble and its sag.
+  tape = ac.createConstantSource(); tape.offset.value = 0; tape.start();
+  const wow = ac.createOscillator(), wowG = gain(9); wow.frequency.value = .33; wow.connect(wowG); wow.start();
+  const drift = ac.createOscillator(), driftG = gain(6); drift.frequency.value = .07; drift.connect(driftG); drift.start();
+  ac._wobble = [tape, wowG, driftG]; ac._wowG = wowG;
+
+  // Buses: pads, chimes (with a soft echo), drums, the sea.
+  ac._pad = gain(.28); ac._pad.connect(master);
+  ac._chime = gain(.16); ac._chime.connect(master);
+  const echo = ac.createDelay(2); echo.delayTime.value = BEAT * 1.5; const fb = gain(.38), eg = gain(.5), ef = filt('lowpass', 2200);
+  ac._chime.connect(echo); echo.connect(ef).connect(fb).connect(echo); ef.connect(eg).connect(master);
+  ac._drum = gain(.0); ac._drum.connect(filt('lowpass', 2600)).connect(master);
+  // Hiss of an old tape, and the sea far below.
+  loop(whiteB).connect(filt('bandpass', 6000, .4)).connect(gain(.012)).connect(master);
+  seaBus = gain(.5); seaBus.connect(master);
+  loop(brownB).connect(filt('lowpass', 420, .6)).connect(gain(.22)).connect(seaBus);
+  const swellG = gain(.0); loop(whiteB).connect(filt('bandpass', 900, .5)).connect(swellG).connect(seaBus);
+  const me = ac;
+  (function swell() { if (ac !== me) return; const now = ac.currentTime, r = 2 + Math.random() * 2;
+    swellG.gain.setTargetAtTime(.03 + Math.random() * .03, now, r / 3); swellG.gain.setTargetAtTime(0, now + r, 1.4);
+    setTimeout(swell, (r + 3 + Math.random() * 3) * 1000); })();
+  // Crackle.
+  (function crackle() { if (ac !== me) return; click(ac.currentTime + .01, .02 + Math.random() * .03); setTimeout(crackle, 120 + Math.random() * 900); })();
+
+  pad(a0 + .1, CHORDS[0], barTime(1) + BAR * 2 - .1, .8);   // the first chord, under the opening
+  nextBar = 1;
+  timer = setInterval(schedule, 100);
+}
+
+function voiceDetune(param) { for (const n of ac._wobble) n.connect(param); }
+
+function pad(at, notes, dur, level) {
+  const g = ac._gain(0), lp = ac._filt('lowpass', 950, .6);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(level, at + 1.4);
+  g.gain.setValueAtTime(level, at + Math.max(1.5, dur - .4)); g.gain.linearRampToValueAtTime(0, at + dur + 1.8);
+  lp.connect(g).connect(ac._pad);
+  for (const m of notes) for (const [type, det, v] of [['sawtooth', -7, .16], ['sawtooth', 7, .16], ['triangle', 0, .3]]) {
+    const o = ac.createOscillator(), og = ac._gain(v / notes.length * 3);
+    o.type = type; o.frequency.value = mtof(m); o.detune.value = det; voiceDetune(o.detune);
+    o.connect(og).connect(lp); o.start(at); o.stop(at + dur + 2);
+  }
+}
+function chime(at, m, v = 1) {
+  const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac._gain(0);
+  o.type = 'triangle'; o.frequency.value = mtof(m); o2.type = 'sine'; o2.frequency.value = mtof(m) * 2;
+  voiceDetune(o.detune); voiceDetune(o2.detune);
+  const g2 = ac._gain(.25); o2.connect(g2).connect(g); o.connect(g);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.5 * v, at + .008); g.gain.exponentialRampToValueAtTime(.001, at + 1.6);
+  g.connect(ac._chime); o.start(at); o2.start(at); o.stop(at + 1.7); o2.stop(at + 1.7);
+}
+function kick(at, v = 1) {
+  const o = ac.createOscillator(), g = ac._gain(0);
+  o.frequency.setValueAtTime(110, at); o.frequency.exponentialRampToValueAtTime(44, at + .14);
+  g.gain.setValueAtTime(.9 * v, at); g.gain.exponentialRampToValueAtTime(.001, at + .42);
+  o.connect(g).connect(ac._drum); o.start(at); o.stop(at + .45);
+}
+function snare(at, v = 1) {
+  const s = ac.createBufferSource(), g = ac._gain(0), bp = ac._filt('bandpass', 1700, .8);
+  s.buffer = ac._white; g.gain.setValueAtTime(.45 * v, at); g.gain.exponentialRampToValueAtTime(.001, at + .22);
+  s.connect(bp).connect(g).connect(ac._drum); s.start(at, Math.random()); s.stop(at + .25);
+  const o = ac.createOscillator(), og = ac._gain(0); o.frequency.value = 190;
+  og.gain.setValueAtTime(.25 * v, at); og.gain.exponentialRampToValueAtTime(.001, at + .12); o.connect(og).connect(ac._drum); o.start(at); o.stop(at + .14);
+}
+function hat(at, v = 1) {
+  const s = ac.createBufferSource(), g = ac._gain(0), hp = ac._filt('highpass', 7000, .7);
+  s.buffer = ac._white; g.gain.setValueAtTime(.12 * v, at); g.gain.exponentialRampToValueAtTime(.001, at + .05);
+  s.connect(hp).connect(g).connect(ac._drum); s.start(at, Math.random()); s.stop(at + .06);
+}
+function click(at, v) {
+  const s = ac.createBufferSource(), g = ac._gain(v), hp = ac._filt('highpass', 2500);
+  s.buffer = ac._white; s.connect(hp).connect(g).connect(master); s.start(at, Math.random()); s.stop(at + .004);
+}
+
+function schedule() {
+  if (!ac) return;
+  const horizon = ac.currentTime - a0 + .6;                  // story time we've scheduled up to
+  while (barTime(nextBar) < horizon) { playBar(nextBar); nextBar++; }
+}
+function playBar(k) {
+  const T = a0 + barTime(k), r = rng(k * 31 + 7);
+  if (k < stopBar) {
+    // Before the stop: the progression, uneasy wobble, a dusty beat once they're walking.
+    const ch = CHORDS[Math.floor((k - 1) / 2) % 4];
+    if (k % 2 === 1 && k > 1) pad(T, ch, BAR * 2, .8);
+    for (let i = 0; i < 8; i++) if (r() < .55) chime(T + i * BEAT / 2 + (i % 2) * .04, ch[[0, 2, 1, 3, 2, 1, 3, 2][i] % ch.length] + 24, .5 + r() * .4);
+    if (k >= 2 && barTime(k) < decelStart) {
+      ac._drum.gain.setTargetAtTime(.7, T, .5);
+      kick(T); kick(T + BEAT * 1.5, .7); snare(T + BEAT); snare(T + BEAT * 3);
+      for (let i = 0; i < 8; i++) hat(T + i * BEAT / 2 + (i % 2) * .05, i % 2 ? .6 : 1);
+    }
+  } else if (k === stopBar) {
+    // The light stops: the beat falls away, the tape sags, and a chord opens up.
+    const sagAt = a0 + stopT;
+    tape.offset.setTargetAtTime(-90, sagAt - .3, .5);
+    tape.offset.setTargetAtTime(0, sagAt + 1.2, 1.1);
+    ac._wowG.gain.setTargetAtTime(3, sagAt, 1);
+    pad(sagAt + .6, BLOOM, HOLD + 1, 1.1);
+    const up = [66, 69, 71, 74, 78, 81, 83, 86];
+    up.forEach((m, i) => chime(sagAt + 1.4 + i * .62, m, .8));
+    chime(sagAt + 1.4 + up.length * .62 + .4, 90, .6);
+    seaBus.gain.setTargetAtTime(.25, sagAt, 1.2);
+  } else if (k < stopBar + holdBars) {
+    // Held: nothing new; the bloom carries it.
+  } else {
+    // After: calmer, the same chords slower, the beat returning softly.
+    if (k === stopBar + holdBars) { seaBus.gain.setTargetAtTime(.5, T, 2); ac._wowG.gain.setTargetAtTime(6, T, 3); }
+    const j = k - stopBar - holdBars, ch = CHORDS[[0, 2][Math.floor(j / 2) % 2]];
+    if (j % 2 === 0) pad(T, ch, BAR * 2, .7);
+    for (let i = 0; i < 4; i++) if (r() < .6) chime(T + i * BEAT + .05, ch[(i * 2 + j) % ch.length] + 24, .45);
+    if (j >= 2) {
+      ac._drum.gain.setTargetAtTime(.45, T, 1);
+      kick(T, .8); snare(T + BEAT * 2, .7);
+      for (let i = 0; i < 4; i++) hat(T + i * BEAT + BEAT / 2, .5);
+    }
+  }
+}
+function setVolume(v, tc) { if (master) master.gain.setTargetAtTime(muted ? 0 : v, ac.currentTime, tc); }
+
+// ---- run ------------------------------------------------------------------------------------
+let t0 = null, ducked = false;
+grain = makeGrain(); resize();
+addEventListener('resize', resize);
+
+// ?t=SECONDS freezes the night at that moment (for stills).
+const still = parseFloat(new URLSearchParams(location.search).get('t'));
+if (!isNaN(still)) { document.getElementById('begin').hidden = true; t0 = 0; }
+
+function loop(now) {
+  if (t0 !== null) {
+    const t = isNaN(still) ? (now - t0) / 1000 : still;
+    frame(t);
+    if (t > ENDING) document.getElementById('again').style.display = 'block';
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+const begin = document.getElementById('begin');
+function go() {
+  if (t0 !== null) return;
+  t0 = performance.now(); begin.classList.add('gone'); begin.blur();
+  startSound();
+  setTimeout(() => document.body.classList.add('awake'), 6000);
+}
+begin.addEventListener('click', go);
+addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(); });
+
+const muteBtn = document.getElementById('mute');
+muteBtn.addEventListener('click', () => {
+  muted = !muted; setVolume(.85, .3);
+  muteBtn.setAttribute('aria-pressed', muted); muteBtn.setAttribute('aria-label', muted ? 'Sound on' : 'Sound off');
+  muteBtn.querySelector('.on').style.display = muted ? 'none' : ''; muteBtn.querySelector('.off').style.display = muted ? '' : 'none';
+});
+document.getElementById('again').addEventListener('click', () => {
+  t0 = performance.now(); document.getElementById('again').style.display = 'none';
+  if (ac) { clearInterval(timer); const old = ac; ac = null; master.gain.setTargetAtTime(0, old.currentTime, .3); setTimeout(() => old.close(), 1200); startSound(); }
+});
+</script>
+</body>
+</html>
