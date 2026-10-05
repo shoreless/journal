@@ -21,7 +21,7 @@ npm test
 npm run check
 ```
 
-`npm test` runs the included geometry, animation, depth, and guidance tests. `npm run check` checks the bundled JavaScript syntax. Rebuild after editing JavaScript source. HTML and CSS live directly in `dist/`.
+`npm test` runs the included geometry, animation, depth, guidance, and distant-light behavior tests. `npm run check` checks the bundled JavaScript syntax. Rebuild after editing JavaScript source. HTML and CSS live directly in `dist/`.
 
 ## How the idea developed
 
@@ -59,6 +59,16 @@ npm run check
 
 17. **Pinch and scroll zoom.** Pinching on the scene and scrolling change camera magnification smoothly without moving the swimmer. The zoom range is 0.65×–2.5×. Thumbsticks remain independent, open panels suspend scene gestures, and Reset restores the normal view.
 
+18. **Hunters in the passage.** Anglerfish- and gulper-eel-inspired forms gained recessed jaws, uneven teeth, vestigial eyes, mottled tissues, ragged fins, and sparse photophores. They were then moved out of the opening view and staggered along the descent between the water column and trench floor.
+
+19. **A living, restless floor.** Crawlers now follow small foraging circuits with smooth starts, listening pauses, articulated steps that follow the terrain, and flexing plates. Siltmouths undulate and probe with their filaments; disturbed sediment drifts behind moving animals. Veils breathe and drift more visibly, while marine snow follows gentle currents. Motion still pauses the living scene.
+
+20. **Distant lights.** Uneven groups of faint, warm and cool pinpoints occupy several depths. They echo the swimmer's translation after a short delay, fade on approach, and remain dark for a while after the swimmer retreats. They have no revealed body and add no interface labels.
+
+21. **Review and handoff.** Visual changes were reviewed through desktop and mobile screenshots before testing and deployment were authorized. The source handoff includes this anonymous design history, local setup instructions, assets, and portable checks.
+
+22. **Visible locomotion.** Fish now swim sustained circuits through the passage and face their direction of travel. Eel spines follow the route their heads took, with traveling tail waves; angler fins and tails propel a moving body. Crawlies move sooner and faster, with brief pauses and feet that stay planted during each stance. The creature clock is separated from the navigation timestep so ordinary low frame rates do not slow the living scene.
+
 ## Controls
 
 | Action | Desktop | Touch |
@@ -85,7 +95,9 @@ Near the door, use **Knock**, then **Enter**, or swim through the open doorway. 
 | `navigation.js` | Swimming, walking, keyboard, thumbsticks, dragging, and zoom |
 | `ocean-depth.js` | Compressed vertical journey and illustrative depth mapping |
 | `creatures.js` | Translucent veils and the ancient floor presence |
-| `benthos.js` | Lure-bearing crawlers and siltmouths |
+| `benthos.js` | Crawlers, siltmouths, foraging routes, articulated gait, and sediment |
+| `pelagic.js` | Anglerfish- and eel-inspired hunters in the descent |
+| `distant-lights.js` | Delayed movement echoes and proximity-sensitive lights |
 | `riftia.js` | Tube-worm colonies, tissue geometry, and animation |
 | `guidance.js` | The faint environmental path |
 | `textures.js` | Procedural material maps |

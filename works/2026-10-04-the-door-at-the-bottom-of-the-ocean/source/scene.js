@@ -6,8 +6,10 @@ import {createSubmarine} from './submarine.js';
 import {materialMaps} from './textures.js';
 import {createBenthos} from './benthos.js';
 import {createRiftia} from './riftia.js';
+import {createPelagic} from './pelagic.js';
 import {createThreshold} from './threshold.js';
 import {createGuidance} from './guidance.js';
+import {createDistantLights} from './distant-lights.js';
 import {FreeNavigation} from './navigation.js';
 import {createVeil,animateVeil} from './creatures.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
@@ -33,6 +35,7 @@ function veil(x,y,z,scale,color,phase,ancient=false){veils.push(createVeil(scene
 veil(5.8,2.7,0,1.4,'#99c6a8',.5);veil(-2,4,-16,.85,'#7b91ba',3);veil(11,7,-24,1.1,'#9c7baf',1.2);veil(1,-1,-23,.55,'#6eafa2',5);veil(-10,10,-57,7,'#738b83',2,true);
 const submarine=createSubmarine(scene);
 const waterLife=new THREE.Group();waterLife.position.y=WATER_HEIGHT;scene.add(waterLife);waterLife.add(submarine.group);for(const c of veils)if(!c.ancient)waterLife.add(c.group);
+const pelagic=createPelagic(waterLife,halo);
 const navigation=new FreeNavigation(camera,canvas,terrain);
 const cabin=createCabin();cabin.loadIllustration('./assets/journal-plates.png');let inside=false;
 const journal=bindJournal({onOpen:()=>navigation.setEnabled(false),onClose:()=>navigation.setEnabled(immersed)});
@@ -42,7 +45,7 @@ export function presenceState(){return {habitat,sounding:soundingAt(camera.posit
 // Slow ribbons of light and scattered life on the canyon floor.
 const floorGlows=[];for(let j=0;j<25;j++){const x=range(-24,24),z=range(-75,12),y=terrain(x,z)+.1;const color=rand()>.3?'#31c2d5':'#7470ff';const h=halo(color,range(.3,.8),x,y,z,range(.12,.3));scene.add(h);floorGlows.push(h);}
 for(let i=0;i<3;i++){const p=new THREE.PointLight(i===1?'#586cd6':'#1bbfb9',35,25,2);p.position.set(i===0?-13:i===1?18:0,-5,-i*18-5);scene.add(p);}
-const count=1100,ps=new Float32Array(count*3),pcolors=new Float32Array(count*3);for(let i=0;i<count;i++){ps[i*3]=range(-55,55);ps[i*3+1]=range(-15,WATER_HEIGHT+40);ps[i*3+2]=range(-90,30);const c=new THREE.Color(rand()>.16?'#548a9e':'#6ee9d8').multiplyScalar(range(.3,1));pcolors.set([c.r,c.g,c.b],i*3);}const particlesGeo=new THREE.BufferGeometry();particlesGeo.setAttribute('position',new THREE.BufferAttribute(ps,3));particlesGeo.setAttribute('color',new THREE.BufferAttribute(pcolors,3));const particles=new THREE.Points(particlesGeo,new THREE.PointsMaterial({size:.07,map:glowTex,vertexColors:true,transparent:true,opacity:.65,blending:THREE.AdditiveBlending,depthWrite:false}));scene.add(particles);
+const count=1100,ps=new Float32Array(count*3),pcolors=new Float32Array(count*3);for(let i=0;i<count;i++){ps[i*3]=range(-55,55);ps[i*3+1]=range(-15,WATER_HEIGHT+40);ps[i*3+2]=range(-90,30);const c=new THREE.Color(rand()>.16?'#548a9e':'#6ee9d8').multiplyScalar(range(.3,1));pcolors.set([c.r,c.g,c.b],i*3);}const particlesGeo=new THREE.BufferGeometry();const particleBases=ps.slice();particlesGeo.setAttribute('position',new THREE.BufferAttribute(ps,3).setUsage(THREE.DynamicDrawUsage));particlesGeo.setAttribute('color',new THREE.BufferAttribute(pcolors,3));const particles=new THREE.Points(particlesGeo,new THREE.PointsMaterial({size:.07,map:glowTex,vertexColors:true,transparent:true,opacity:.65,blending:THREE.AdditiveBlending,depthWrite:false}));scene.add(particles);
 const ribbonGeo=new THREE.BufferGeometry(),rp=[];for(let i=0;i<220;i++){const q=i/219;rp.push(-9+q*14,3+Math.sin(q*6)*1.8,-25+q*2);}ribbonGeo.setAttribute('position',new THREE.Float32BufferAttribute(rp,3));const ribbon=new THREE.Points(ribbonGeo,new THREE.PointsMaterial({color:'#4e95c9',map:glowTex,size:.16,transparent:true,opacity:.65,blending:THREE.AdditiveBlending,depthWrite:false}));waterLife.add(ribbon);
 let running=!matchMedia('(prefers-reduced-motion: reduce)').matches,immersed=false,glow=1,t=0;
 let chartOpen=false;
@@ -61,10 +64,11 @@ window.addEventListener('resize',()=>{navigation.clear();camera.aspect=innerWidt
 
 // Fictional benthic forms use mottled chitin, folded tissues and angler-like lures.
 let habitat='water';const floorLife=new THREE.Group();scene.add(floorLife);
-const benthos=createBenthos(floorLife,terrain,halo,rand);
+const benthos=createBenthos(floorLife,terrain,halo,rand,glowTex);
 const riftia=createRiftia(floorLife,terrain,glowTex);
 const threshold=createThreshold(floorLife,terrain);
 const guidance=createGuidance(scene,terrain,glowTex,threshold.position);
+const distantLights=createDistantLights(scene,terrain,glowTex);
 const previousPosition=new THREE.Vector3();
 export function thresholdState(){return {opened:threshold.opened,angle:threshold.angle,distance:threshold.distance(camera.position),position:threshold.position.toArray(),visible:floorLife.visible};}
 $('#read-journal').onclick=()=>{if(inside&&cabin.distance(camera.position)<3.2)journal.open();};
@@ -83,9 +87,9 @@ function markHabitat(next){
 function setHabitat(next){setChart(false);if(inside)setInteriorMode(false);markHabitat(next);navigation.reset(next);}
 $('#water').onclick=()=>setHabitat('water');$('#floor').onclick=()=>setHabitat('floor');setHabitat('water');
 
-const clock=new THREE.Clock();let ready=false;function animate(){requestAnimationFrame(animate);const delta=Math.min(clock.getDelta(),.05);if(document.hidden)return;if(running)t+=delta;previousPosition.copy(camera.position);navigation.update(delta);
+const clock=new THREE.Clock();let ready=false;function animate(){requestAnimationFrame(animate);const elapsed=clock.getDelta(),delta=Math.min(elapsed,.05);if(document.hidden)return;if(running)t+=Math.min(elapsed,.25);previousPosition.copy(camera.position);navigation.update(delta);
 if(!inside){const next=habitatAt(camera.position.y,habitat);if(next!==habitat)markHabitat(next);}
 if(inside){cabin.constrain(camera.position,previousPosition);if(camera.position.z>3.45)exitCabin();}else if(habitat==='floor'){threshold.collide(camera.position,previousPosition);const door=threshold.position;if(immersed&&threshold.angle>.3&&Math.abs(camera.position.x-door.x)<.75&&camera.position.y>door.y+.2&&camera.position.y<door.y+3.1&&previousPosition.z>door.z+.12&&camera.position.z<=door.z+.12)enterCabin();}
 threshold.update(delta,t,glow);cabin.update(t);$('#threshold-action').hidden=inside||!(habitat==='floor'&&immersed&&threshold.distance(camera.position)<7);$('#enter-door').hidden=threshold.angle<=.3;$('#journal-action').hidden=!(inside&&immersed&&cabin.distance(camera.position)<3.2);const sounding=Math.round(soundingAt(camera.position.y));if(!inside){const depthFraction=THREE.MathUtils.clamp((sounding-1800)/9120,0,1);$('#temperature').textContent=(3.2-1.4*depthFraction).toFixed(1);$('#pressure').textContent=Math.round(180+920*depthFraction).toLocaleString('en-US');}$('#depth').textContent=inside?'—':sounding.toLocaleString('en-US');$('#instrument-status').textContent=inside?'—':'DEPTH';$('#depth-needle').setAttribute('transform',`rotate(${inside?-135:THREE.MathUtils.clamp(sounding/11000,0,1)*270-135} 50 50)`);
-submarine.update(t);for(const c of veils){animateVeil(c,t,glow);const mobile=innerWidth<600&&c===veils[0];c.group.scale.setScalar(c.scale*(mobile?.72:1));if(mobile){c.group.position.x-=2;c.group.position.y-=3.5;}}
-benthos.update(t,glow);riftia.update(t,glow);guidance.update(t,glow,immersed&&!inside);memory.material.opacity=Math.max(0,memory.material.opacity-delta*.025);memory.scale.addScalar(delta*.05);particles.position.y=(t*.07)%8;particles.rotation.y=Math.sin(t*.02)*.03;ribbon.rotation.z=Math.sin(t*.15)*.04;composer.render();if(!ready){ready=true;$('#loading').style.opacity=0;setTimeout(()=>$('#loading').remove(),1100);}}animate();
+submarine.update(t);pelagic.update(t,glow);for(const c of veils){animateVeil(c,t,glow);const mobile=innerWidth<600&&c===veils[0];c.group.scale.setScalar(c.scale*(mobile?.72:1));if(mobile){c.group.position.x-=2;c.group.position.y-=3.5;}}
+benthos.update(t,glow);riftia.update(t,glow);guidance.update(t,glow,immersed&&!inside);distantLights.update(t,glow,camera.position,immersed&&!inside);memory.material.opacity=Math.max(0,memory.material.opacity-delta*.025);memory.scale.addScalar(delta*.05);for(let i=0;i<count;i++){const n=i*3,x=particleBases[n],y=particleBases[n+1],z=particleBases[n+2],span=WATER_HEIGHT+55;ps[n]=x+Math.sin(y*.07+t*.18)*1.4;ps[n+1]=-15+((y+15-t*(.09+(i%7)*.008))%span+span)%span;ps[n+2]=z+Math.cos(x*.09+t*.13)*.9;}particlesGeo.attributes.position.needsUpdate=true;ribbon.rotation.z=Math.sin(t*.15)*.04;composer.render();if(!ready){ready=true;$('#loading').style.opacity=0;setTimeout(()=>$('#loading').remove(),1100);}}animate();

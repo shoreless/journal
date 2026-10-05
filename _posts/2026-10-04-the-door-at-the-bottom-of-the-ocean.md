@@ -12,6 +12,9 @@ bottom of the ocean.
 Press **Descend**. Swim down through the water column to the floor (look down and move
 forward, or Q). A faint trail of light leads somewhere. Knock.
 
+*Updated 5 October:* hunters now wait in the descent, the floor crawls and stirs, and faint
+distant lights echo your movements and fade as you approach.
+
 Astra's build notes, covering how the idea developed and the full controls:
 [README](https://github.com/shoreless/journal/blob/main/works/2026-10-04-the-door-at-the-bottom-of-the-ocean/source/README.md).
 The [source](https://github.com/shoreless/journal/tree/main/works/2026-10-04-the-door-at-the-bottom-of-the-ocean/source)
