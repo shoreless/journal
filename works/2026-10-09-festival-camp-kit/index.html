@@ -1,0 +1,706 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Festival Camp Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D scene; floating control card (left on desktop, bottom sheet on phones); tap-to-inspect info card. */
+:root{
+  --bg:#dfe8ea; --panel:#f8faf9; --panel-2:#eef3f2; --ink:#1c282b; --muted:#5a6a6d; --line:#d2dcdc;
+  --accent:#c9721f; --accent-soft:#f6e3cd; --accent-ink:#ffffff; --shadow:0 10px 30px rgba(20,40,45,.16);
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Instrument Sans", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1517; --panel:#162124; --panel-2:#1c2a2e; --ink:#e6eeec; --muted:#93a5a6; --line:#2a3b3e;
+  --accent:#f0a24a; --accent-soft:#3a2a17; --accent-ink:#1b1206; --shadow:0 10px 30px rgba(0,0,0,.45); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1517; --panel:#162124; --panel-2:#1c2a2e; --ink:#e6eeec; --muted:#93a5a6; --line:#2a3b3e;
+  --accent:#f0a24a; --accent-soft:#3a2a17; --accent-ink:#1b1206; --shadow:0 10px 30px rgba(0,0,0,.45); color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden}
+#scene{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none}
+.hud{position:fixed;left:16px;top:calc(16px + env(safe-area-inset-top,0px));width:340px;max-height:calc(100% - 32px - env(safe-area-inset-top,0px));
+  overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:18px 18px 16px;display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1.05;margin:4px 0 0;text-wrap:balance}
+.lede{margin:6px 0 0;color:var(--muted);font-size:13.5px;line-height:1.45}
+.label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:4px}
+.seg2{grid-template-columns:1fr 1fr}
+.seg button{font:500 13px var(--f-body);color:var(--ink);background:transparent;border:0;border-radius:7px;padding:8px 4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible,.step:focus-visible,.toggle input:focus-visible+span,.kit button:focus-visible,.play:focus-visible,.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.modenote{font-size:13px;line-height:1.45;margin:8px 0 0;color:var(--ink)}
+.steps{display:flex;flex-direction:column;gap:6px}
+.steps-head{display:flex;justify-content:space-between;align-items:center}
+.play{font:500 12px var(--f-body);color:var(--accent);background:var(--accent-soft);border:0;border-radius:999px;padding:5px 11px;cursor:pointer}
+.step{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start;text-align:left;width:100%;
+  background:transparent;border:1px solid var(--line);border-radius:10px;padding:9px 10px;cursor:pointer;color:var(--ink);font:400 13px/1.4 var(--f-body)}
+.step b{display:block;font-weight:600;margin-bottom:1px}
+.step .n{font-family:var(--f-mono);font-size:12px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);color:var(--muted)}
+.step[aria-current="step"]{border-color:var(--accent);background:var(--accent-soft)}
+.step[aria-current="step"] .n{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.toggles{display:flex;flex-wrap:wrap;gap:6px}
+.toggle{position:relative}
+.toggle input{position:absolute;opacity:0;pointer-events:none}
+.toggle span{display:inline-block;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;user-select:none}
+.toggle input:checked+span{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+details.kitwrap summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);list-style:none;display:flex;justify-content:space-between}
+details.kitwrap summary::-webkit-details-marker{display:none}
+details.kitwrap summary::after{content:"Show";font-weight:500;color:var(--accent)}
+details.kitwrap[open] summary::after{content:"Hide"}
+.kit{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column}
+.kit li{border-top:1px solid var(--line)}
+.kit button{display:grid;grid-template-columns:1fr auto;gap:8px;width:100%;text-align:left;background:none;border:0;color:var(--ink);padding:8px 0;cursor:pointer;font:400 13px var(--f-body)}
+.kit .p{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.kit .sub{display:block;font-size:11.5px;color:var(--muted)}
+.kit .fee{display:grid;grid-template-columns:1fr auto;padding:6px 0;font-size:12.5px;color:var(--muted)}
+.kit .total{display:grid;grid-template-columns:1fr auto;padding:9px 0 2px;font-weight:600}
+.kit .total .p{color:var(--ink);font-weight:500}
+.dates{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12.5px}
+.dates dt{font-family:var(--f-mono);font-size:11.5px;color:var(--accent);padding-top:1px}
+.dates dd{margin:0;color:var(--ink)}
+.info{position:fixed;right:16px;top:calc(16px + env(safe-area-inset-top,0px));width:290px;background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--shadow);padding:14px 16px 15px}
+.info h2{font-family:var(--f-display);font-weight:700;font-size:18px;margin:2px 26px 6px 0;line-height:1.15}
+.info p{margin:0;font-size:13px;line-height:1.5}
+.info .spec{margin-top:8px;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);line-height:1.55}
+.close{position:absolute;right:10px;top:10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;font-size:14px;line-height:1}
+.hint{position:fixed;right:16px;bottom:calc(64px + env(safe-area-inset-bottom,0px));font-size:12px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;opacity:.92}
+.tools{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:6px}
+.tools button{font:500 13px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 13px;cursor:pointer;box-shadow:var(--shadow)}
+.tools button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.tools button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hud.collapsed > *:not(:first-child){display:none}
+@media (max-width:720px){
+  .hud{left:0;right:0;top:auto;bottom:0;width:auto;max-height:48%;border-radius:16px 16px 0 0;border-bottom:0;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));gap:12px}
+  h1{font-size:21px}
+  .lede{display:none}
+  .info{left:16px;right:16px;width:auto}
+  .hint{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto;right:auto;left:50%;transform:translateX(-50%);white-space:nowrap}
+  .tools{top:calc(52px + env(safe-area-inset-top,0px));bottom:auto;right:16px}
+  .tools button{padding:7px 11px;font-size:12px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<canvas id="scene" aria-label="3D model of a festival campsite: Amenity Dome S tent with the front door propped up as an awning, two chairs, a table and a lantern"></canvas>
+
+<aside class="hud" aria-label="Controls">
+  <div>
+    <div class="eyebrow">A first-timer's guide</div>
+    <h1>Festival camp kit</h1>
+    <p class="lede">Never pitched a tent? This is a simple setup for two people at a festival. Step through pitching the tent and propping the door, drag to look around, and tap any gear for details.</p>
+  </div>
+
+  <div class="seg seg2" role="tablist" aria-label="Guide">
+    <button id="tab-pitch" data-tab="pitch" aria-pressed="false">Pitch the tent</button>
+    <button id="tab-door" data-tab="door" aria-pressed="true">Prop the door</button>
+  </div>
+
+  <div class="steps" id="pitchsteps" hidden>
+    <div class="steps-head">
+      <div class="label" style="margin:0">Snow Peak Amenity Dome S</div>
+      <button class="play" id="pplay">Play steps</button>
+    </div>
+    <p class="modenote" style="margin:0 0 2px;color:var(--muted)">4 poles: 2 yellow, 1 green, 1 plain. The colour tape on each pole matches tape on the tent, so match colours as you go.</p>
+    <button class="step pstep" id="p1" data-step="1"><span class="n">1</span><span><b>Ground sheet, then the inner tent</b>Clear stones from a flat spot and lay the sheet. Spread the inner tent on top, door facing where you want the porch. Leave about 50cm around it for ropes and pegs.</span></button>
+    <button class="step pstep" id="p2" data-step="2"><span class="n">2</span><span><b>Yellow poles make the X</b>Slide the two yellow poles through the yellow mesh sleeves so they cross. Seat each end in its corner pin and the dome stands up.</span></button>
+    <button class="step pstep" id="p3" data-step="3"><span class="n">3</span><span><b>Green pole across</b>Feed the green pole through its sleeve across the X and push its ends into the green-taped pins.</span></button>
+    <button class="step pstep" id="p4" data-step="4"><span class="n">4</span><span><b>Fly on, the right way round</b>Drape the outer tent over with its door lined up with the inner door. Facing it the wrong way is the classic mistake. Slide the plain pole into the front sleeve to make the porch.</span></button>
+    <button class="step pstep" id="p5" data-step="5"><span class="n">5</span><span><b>Peg and rope it out</b>Peg each corner through the fly's tape, which sits right over the inner tent's pin. Peg the front, then run the guy ropes out (2 each of long, medium and short) and pull the fly tight.</span></button>
+    <button class="step pstep" id="p6" data-step="6"><span class="n">6</span><span><b>Move in</b>Pads and sleeping bags inside, chairs and table out front. Then prop the door using the other tab.</span></button>
+  </div>
+
+  <div id="doorpanel">
+    <div class="label">Front door</div>
+    <div class="seg" role="group" aria-label="Front door setup">
+      <button id="m-closed" data-mode="closed" aria-pressed="false">Closed</button>
+      <button id="m-one" data-mode="one" aria-pressed="true">1 pole</button>
+      <button id="m-two" data-mode="two" aria-pressed="false">2 poles</button>
+    </div>
+    <p class="modenote" id="modenote"></p>
+  </div>
+
+  <div class="steps" id="steps">
+    <div class="steps-head">
+      <div class="label" style="margin:0">Propping it with one pole</div>
+      <button class="play" id="play">Play steps</button>
+    </div>
+    <button class="step" id="s1" data-step="1"><span class="n">1</span><span><b>Open the door flap</b>Unzip the front door of the outer tent and fold it outward.</span></button>
+    <button class="step" id="s2" data-step="2"><span class="n">2</span><span><b>Pole through the eyelet</b>Push the pole's top pin through the metal ring on one outer corner and stand it up.</span></button>
+    <button class="step" id="s3" data-step="3"><span class="n">3</span><span><b>Rope out and peg it</b>Tie a rope to the pole top, run it out and down at about 45°, peg it and pull it tight.</span></button>
+    <button class="step" id="s4" data-step="4" aria-current="step"><span class="n">4</span><span><b>Peg the other corner</b>Peg the low corner to the ground. Point that low side toward the wind or rain.</span></button>
+  </div>
+
+  <div>
+    <div class="label">View</div>
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="t-inside"><span>See inside</span></label>
+      <label class="toggle"><input type="checkbox" id="t-night"><span>Festival night</span></label>
+      <label class="toggle"><input type="checkbox" id="t-person"><span>Person for scale</span></label>
+    </div>
+  </div>
+
+  <details class="kitwrap" id="kitwrap">
+    <summary>What you need</summary>
+    <ul class="kit">
+      <li><button data-key="tent"><span>Dome tent for two<span class="sub">With its poles, pegs, ropes and a hammer</span></span><span class="p">Tent</span></button></li>
+      <li><button data-key="pole"><span>Canopy pole, about 160cm<span class="sub">Optional. Turns the door into an awning</span></span><span class="p">Tent</span></button></li>
+      <li><button data-key="sheet"><span>Ground sheet<span class="sub">Sized to the tent floor</span></span><span class="p">Tent</span></button></li>
+      <li><button data-key="bag"><span>Sleeping bag ×2<span class="sub">Rated for colder than you expect</span></span><span class="p">Sleep</span></button></li>
+      <li><button data-key="mat"><span>Sleeping pad ×2<span class="sub">Keeps the ground's cold off you</span></span><span class="p">Sleep</span></button></li>
+      <li><button data-key="chair"><span>Camp chair ×2</span><span class="p">Camp</span></button></li>
+      <li><button data-key="table"><span>Small folding table</span><span class="p">Camp</span></button></li>
+      <li><button data-key="lantern"><span>Lantern and spare batteries<span class="sub">Plus a headlamp each for walking back late</span></span><span class="p">Camp</span></button></li>
+      <li><button data-key="blanket"><span>Fleece blanket ×2<span class="sub">For late nights outside, or an extra layer</span></span><span class="p">Camp</span></button></li>
+    </ul>
+  </details>
+</aside>
+
+<div class="info" id="info" hidden role="dialog" aria-live="polite">
+  <button class="close" id="info-close" aria-label="Close details">×</button>
+  <div class="eyebrow" id="info-eyebrow"></div>
+  <h2 id="info-title"></h2>
+  <p id="info-body"></p>
+  <div class="spec" id="info-spec"></div>
+</div>
+<div class="hint" id="hint">Drag to orbit · right-drag or two fingers to pan · tap gear</div>
+<div class="tools" role="toolbar" aria-label="View tools">
+  <button id="b-pan" aria-pressed="false">Pan mode</button>
+  <button id="b-center">Recenter</button>
+  <button id="b-panel" aria-pressed="false">Hide panel</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const V = (x,y,z)=>new THREE.Vector3(x,y,z);
+const INFO = {
+  tent:{eyebrow:"Tent",title:"Snow Peak Amenity Dome S",body:"Sleeps two with room to spare (a reviewer fit four adults). Peak height is about 1.2m, so you'll be sitting, not standing, inside.",spec:"Inner 220 × 150cm · height 120cm · entrance 113cm<br>Overall approx. 335 × 230cm · 5.0kg<br>4 poles · pegs, ropes, hammer and bag included<br>Waterproofing 1,800mm minimum<br>Pole colours are exaggerated in this model"},
+  door:{eyebrow:"Tent · front door",title:"Front door panel",body:"Unzip it and fold it outward. Held up by the canopy pole, it becomes an awning over the porch. Zip it shut when it's windy or you leave the tent.",spec:"Use the switch at the top of the panel to compare closed, 1 pole and 2 poles."},
+  pole:{eyebrow:"Optional",title:"Canopy pole, 160cm",body:"The top pin goes through the eyelet on the door's outer corner. A rope from the pole top to a peg holds it upright.",spec:"One pole gives a slanted awning<br>Two poles give a level one"},
+  rope:{eyebrow:"Tent · rope and pegs",title:"Guy rope and peg",body:"Run the rope from the pole top out and down at about 45°, then peg it and pull it tight. Tension is what keeps the pole standing.",spec:"Rope and pegs come with the tent"},
+  sheet:{eyebrow:"Tent",title:"Ground sheet",body:"Goes under the tent to keep damp grass off the floor. Tuck any edge that sticks out back under, so rain doesn't collect on it.",spec:"Pick one the same size as the tent floor, or slightly smaller"},
+  bag:{eyebrow:"Sleeping · ×2",title:"Isuka Alpha Light 700X",body:"Proper cold-weather bags. Autumn festival nights can drop to around 10°C, so check the comfort rating, not just the limit. Long enough for someone 176cm tall with room to spare.",spec:"81 × 203cm · 1.3kg each<br>Comfort −1 to 4°C · limit −6°C"},
+  mat:{eyebrow:"Sleeping · ×2",title:"Montbell foam pad 180",body:"Thin closed-cell foam under each bag. If either of you feels cold coming up from below, lay a fleece blanket underneath too.",spec:"181 × 51 × 1.6cm · 383g each"},
+  chair:{eyebrow:"Camp · ×2",title:"Helinox Chair One",body:"Low, packable camp chairs, light enough to carry to the stages and back.",spec:"52 × 50 × 66cm · 960g · holds 145kg"},
+  blanket:{eyebrow:"Camp · ×2",title:"Fleece blanket",body:"Wrap up in one for late nights outside, or lay one under your sleeping bag for extra warmth.",spec:"One per person"},
+  table:{eyebrow:"Camp",title:"Taras Bulba roll-top table L",body:"An aluminium slat table that rolls up into a tube. Good for drinks, the lantern and festival food.",spec:"120 × 70 × 70cm · 5.9kg"},
+  lantern:{eyebrow:"Camp",title:"GENTOS Explorer EX-V777D",body:"LED lantern for the table or to hang inside. It runs on three D batteries, so pack a spare set.",spec:"Approx. 10 × 18cm · 802g with batteries<br>3 × D batteries"},
+  person:{eyebrow:"For scale",title:"A 176cm person",body:"Next to the tent, which peaks at about 1.2m. Lying down, they fit in the 203cm sleeping bags with plenty to spare.",spec:"Tent peak ≈ 120cm · bag 203cm · pad 181cm"}
+};
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const DAY_SKY = new THREE.Color('#b8d2da'), NIGHT_SKY = new THREE.Color('#0a1020');
+scene.background = DAY_SKY.clone();
+scene.fog = new THREE.Fog(DAY_SKY.clone(), 18, 48);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
+camera.position.set(4.6, 2.6, 5.4);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.set(0, 0.55, 1.1);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 2; controls.maxDistance = 16;
+controls.maxPolarAngle = Math.PI/2 - 0.04;
+controls.enablePan = true; controls.screenSpacePanning = true; controls.panSpeed = 0.9;
+controls.update();
+const HOME = {pos:camera.position.clone(), target:controls.target.clone()};
+
+const hemi = new THREE.HemisphereLight('#eaf4ff', '#566b3a', 0.85); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff3df', 1.0);
+sun.position.set(5, 9, 4); sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera, {left:-6,right:6,top:6,bottom:-6,near:1,far:30});
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+
+const std = (color, o={}) => new THREE.MeshStandardMaterial(Object.assign({color, roughness:0.85, metalness:0}, o));
+const clickables = [];
+function tag(obj, key){ obj.userData.key = key; obj.traverse(m=>{ if(m.isMesh){ m.castShadow = true; m.receiveShadow = true; } }); clickables.push(obj); return obj; }
+
+// ---------- ground ----------
+const groundMat = std('#6f8c4b', {roughness:1});
+const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 64), groundMat);
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+// grass tufts
+(function(){
+  const g = new THREE.ConeGeometry(0.018, 0.11, 3); g.translate(0, 0.055, 0);
+  const m = std('#58763a', {roughness:1});
+  const n = 900, inst = new THREE.InstancedMesh(g, m, n), d = new THREE.Object3D();
+  let i = 0;
+  while(i < n){
+    const r = 1.2 + Math.random()*13, a = Math.random()*Math.PI*2;
+    const x = Math.cos(a)*r, z = Math.sin(a)*r;
+    if(Math.abs(x) < 1.5 && z > -1.1 && z < 3.6) continue;
+    d.position.set(x, 0, z); d.rotation.set((Math.random()-.5)*.5, Math.random()*3, (Math.random()-.5)*.5);
+    const s = 0.7 + Math.random()*0.9; d.scale.set(s, s, s); d.updateMatrix();
+    inst.setMatrixAt(i++, d.matrix);
+  }
+  scene.add(inst);
+})();
+
+// hills of trees
+const treeMat = std('#2f4a2c', {roughness:1});
+(function(){
+  for(let i=0;i<70;i++){
+    const a = (i/70)*Math.PI*2 + Math.random()*0.08, r = 17 + Math.random()*10;
+    const h = 2.5 + Math.random()*3.5;
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.8 + Math.random()*0.7, h, 7), treeMat);
+    t.position.set(Math.cos(a)*r, h/2, Math.sin(a)*r); scene.add(t);
+  }
+})();
+
+// distant stage (night only)
+const stage = new THREE.Group();
+const stageMat = std('#141414', {emissive:new THREE.Color('#ff5fa2'), emissiveIntensity:0});
+const stageBox = new THREE.Mesh(new THREE.BoxGeometry(7, 3.2, 1.2), stageMat); stageBox.position.y = 1.6; stage.add(stageBox);
+const beams = [];
+['#ff4f9a','#5fd0ff','#ffd25f'].forEach((c,i)=>{
+  const bm = new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide});
+  const b = new THREE.Mesh(new THREE.ConeGeometry(1.4, 14, 20, 1, true), bm);
+  b.geometry.translate(0, -7, 0); b.position.set(-2.4 + i*2.4, 3.2, 0); b.rotation.z = Math.PI;
+  stage.add(b); beams.push(b);
+});
+stage.position.set(-13, 0, -19); stage.rotation.y = 0.55; scene.add(stage);
+
+// stars
+const starMat = new THREE.PointsMaterial({color:'#ffffff', size:0.18, transparent:true, opacity:0, depthWrite:false, fog:false});
+(function(){
+  const n = 900, pos = new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    const u = Math.random()*Math.PI*2, v = Math.random()*0.45*Math.PI + 0.05;
+    pos[i*3] = Math.cos(u)*Math.cos(v)*70; pos[i*3+1] = Math.sin(v)*70; pos[i*3+2] = Math.sin(u)*Math.cos(v)*70;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(g, starMat));
+})();
+
+// ---------- tent ----------
+const FLY = {x:1.22, y:1.26, z:0.88}, INNER = {x:1.08, y:1.18, z:0.74};
+const flyMat = std('#ece5d3', {side:THREE.DoubleSide, transparent:true, opacity:1});
+const innerMat = std('#e6d39b', {side:THREE.DoubleSide, transparent:true, opacity:1, emissive:new THREE.Color('#ffb860'), emissiveIntensity:0});
+const poleMat = std('#8c9298', {metalness:0.6, roughness:0.4});
+const yellowPoleMat = std('#d9b23a', {metalness:0.4, roughness:0.45});
+const greenPoleMat = std('#4f9a5a', {metalness:0.4, roughness:0.45});
+const tent = new THREE.Group();
+const dome = (r, mat)=>{ const m = new THREE.Mesh(new THREE.SphereGeometry(1, 56, 22, 0, Math.PI*2, 0, Math.PI/2), mat); m.scale.set(r.x, r.y, r.z); return m; };
+const innerMesh = dome(INNER, innerMat); tent.add(innerMesh);
+const flyGroup = new THREE.Group(); tent.add(flyGroup);
+const flyMesh = dome(FLY, flyMat); flyGroup.add(flyMesh);
+const tentPoles = [];
+// crossing poles over the fly
+[1,-1].forEach(sgn=>{
+  const ux = 1/Math.SQRT2, uz = sgn/Math.SQRT2;
+  const A = 1/Math.sqrt((ux/(FLY.x+0.01))**2 + (uz/(FLY.z+0.01))**2);
+  const pts = []; for(let i=0;i<=32;i++){ const t = Math.PI*i/32; pts.push(V(Math.cos(t)*A*ux, Math.sin(t)*(FLY.y+0.012), Math.cos(t)*A*uz)); }
+  const pm = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, 0.012, 6, false), yellowPoleMat);
+  tent.add(pm); tentPoles.push(pm);
+});
+// third (green) pole crossing the X, front to back
+const greenPts = []; for(let i=0;i<=32;i++){ const t = Math.PI*i/32; greenPts.push(V(0, Math.sin(t)*(FLY.y+0.02), Math.cos(t)*(FLY.z+0.02))); }
+const greenPole = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(greenPts), 64, 0.012, 6, false), greenPoleMat);
+tent.add(greenPole);
+// vestibule panels
+const D1=V(-0.55,0.98,0.45), D2=V(0.55,0.98,0.45), H1=V(-0.6,0.95,1.25), H2=V(0.6,0.95,1.25);
+const B1=V(-0.95,0,0.55), B2=V(0.95,0,0.55), G1=V(-0.7,0,1.35), G2=V(0.7,0,1.35);
+function quadGeo(a,b,c,d){
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([a,b,c, a,c,d].flatMap(p=>[p.x,p.y,p.z]), 3));
+  g.computeVertexNormals(); return g;
+}
+const vest = new THREE.Group();
+vest.add(new THREE.Mesh(quadGeo(D1,D2,H2,H1), flyMat));
+vest.add(new THREE.Mesh(quadGeo(D1,H1,G1,B1), flyMat));
+vest.add(new THREE.Mesh(quadGeo(D2,B2,G2,H2), flyMat));
+flyGroup.add(vest);
+// brim pole along the hinge
+flyGroup.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(-0.95,0,0.55), V(-0.62,0.9,1.2), V(0,1.0,1.28), V(0.62,0.9,1.2), V(0.95,0,0.55)]), 48, 0.01, 6, false), poleMat));
+tag(tent, 'tent'); scene.add(tent);
+
+// door panel (animated)
+const SEG = 10;
+const doorGeo = new THREE.BufferGeometry();
+const doorPos = new Float32Array((SEG+1)*(SEG+1)*3);
+const doorIdx = [];
+for(let j=0;j<SEG;j++) for(let i=0;i<SEG;i++){ const a=j*(SEG+1)+i, b=a+1, c=a+SEG+1, d=c+1; doorIdx.push(a,c,b, b,c,d); }
+doorGeo.setIndex(doorIdx);
+doorGeo.setAttribute('position', new THREE.BufferAttribute(doorPos, 3));
+const doorMat = std('#ddd5c1', {side:THREE.DoubleSide, transparent:true, opacity:1});
+const door = new THREE.Mesh(doorGeo, doorMat); door.castShadow = true;
+const doorGroup = new THREE.Group(); doorGroup.add(door); tag(doorGroup, 'door'); scene.add(doorGroup);
+// eyelets on the flap corners
+const eyeMat = std('#b9bcc0', {metalness:0.8, roughness:0.3});
+const eyeL = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.006, 6, 14), eyeMat), eyeR = eyeL.clone();
+doorGroup.add(eyeL, eyeR);
+
+// ground sheet
+const sheet = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.006, 1.48), std('#4d6f86', {roughness:0.6}));
+sheet.position.set(0, 0.003, 0); tag(sheet, 'sheet'); scene.add(sheet);
+
+// pads + bags inside
+const sleepGear = [], campGear = [];
+[[0.33,'#2f86a6','#b5462e'], [-0.33,'#2f86a6','#2f4a6b']].forEach(([z, padC, bagC])=>{
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.016, 0.5), std(padC)); pad.position.set(0, 0.014, z); tag(pad, 'mat'); scene.add(pad);
+  const bagG = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.26, 1.82, 22), std(bagC, {roughness:0.7}));
+  body.rotation.z = Math.PI/2; body.scale.set(1, 1, 0.42); bagG.add(body);
+  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.31, 20, 12), std(bagC, {roughness:0.7}));
+  hood.scale.set(0.35, 0.42, 1); hood.position.x = -0.91; bagG.add(hood);
+  bagG.position.set(0.02, 0.14, z); tag(bagG, 'bag'); scene.add(bagG);
+  sleepGear.push(pad, bagG);
+});
+
+// canopy poles, ropes, pegs
+const canopyMat = std('#5b5f63', {metalness:0.5, roughness:0.45});
+function makePole(){ const m = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1, 10), canopyMat); m.castShadow = true; const g = new THREE.Group(); g.add(m); tag(g,'pole'); scene.add(g); return m; }
+const poleL = makePole(), poleR = makePole();
+const ropeMat = new THREE.LineBasicMaterial({color:'#d9603a'});
+function makeRope(){ const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6),3)); const l = new THREE.Line(g, ropeMat); scene.add(l); return l; }
+const ropeL = makeRope(), ropeR = makeRope(), ropeLink = makeRope();
+const pegMat = std('#c66a2a', {metalness:0.3, roughness:0.5});
+function makePeg(){ const m = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.003, 0.16, 6), pegMat); const g = new THREE.Group(); g.add(m); m.position.y = 0.03; m.rotation.z = 0.3; tag(g,'rope'); scene.add(g); return g; }
+const pegL = makePeg(), pegR = makePeg(), pegCorner = makePeg(), pegD1 = makePeg(), pegD2 = makePeg();
+const cornerPegs = [[-0.87,-0.62],[0.87,-0.62],[-0.95,0.55],[0.95,0.55]].map(([x,z])=>{ const p = makePeg(); p.position.set(x,0,z); return p; });
+// invisible fat hit-targets for ropes
+const ropeHitMat = new THREE.MeshBasicMaterial({visible:false});
+function ropeHit(){ const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1,6), ropeHitMat); const g = new THREE.Group(); g.add(m); tag(g,'rope'); scene.add(g); return m; }
+const hitL = ropeHit(), hitR = ropeHit();
+
+// ---------- furniture ----------
+function chair(x, z, rot, fabric, blanketColor){
+  const g = new THREE.Group();
+  const frame = std('#30353b', {metalness:0.5, roughness:0.4}), cloth = std(fabric, {roughness:0.9});
+  const leg = (a,b)=>{ const dir = b.clone().sub(a), len = dir.length(); const m = new THREE.Mesh(new THREE.CylinderGeometry(0.009,0.009,len,6), frame); m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(V(0,1,0), dir.normalize()); g.add(m); };
+  [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sz])=>{ leg(V(sx*0.27,0,sz*0.25), V(sx*0.2,0.31,sz*0.17)); });
+  leg(V(-0.2,0.31,-0.17), V(-0.21,0.68,-0.29)); leg(V(0.2,0.31,-0.17), V(0.21,0.68,-0.29));
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.02,0.38), cloth); seat.position.set(0,0.3,0.0); seat.rotation.x = -0.12; g.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.42,0.02), cloth); back.position.set(0,0.5,-0.23); back.rotation.x = -0.3; g.add(back);
+  const feet = std('#22262b');
+  [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sz])=>{ const f = new THREE.Mesh(new THREE.SphereGeometry(0.02,8,6), feet); f.position.set(sx*0.27,0.01,sz*0.25); g.add(f); });
+  g.position.set(x,0,z); g.rotation.y = rot; tag(g,'chair'); scene.add(g); campGear.push(g);
+  if(blanketColor){
+    const b = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.025,0.16), std(blanketColor,{roughness:1})); top.position.set(0,0.705,-0.31); b.add(top);
+    const hang = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.34,0.025), std(blanketColor,{roughness:1})); hang.position.set(0,0.53,-0.39); hang.rotation.x = -0.18; b.add(hang);
+    b.position.copy(g.position); b.rotation.y = rot; tag(b,'blanket'); scene.add(b); campGear.push(b);
+  }
+}
+chair(-0.8, 3.0, Math.PI - 0.35, '#262a2f', '#c9963a');
+chair(0.55, 3.05, Math.PI + 0.3, '#2f4d3c', '#a8513a');
+
+// roll table
+const table = new THREE.Group();
+const slatMat = std('#c9c3b5', {metalness:0.45, roughness:0.45});
+for(let i=0;i<12;i++){ const s = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.025,0.054), slatMat); s.position.set(0,0.7,-0.33+i*0.06); table.add(s); }
+const tLeg = std('#9aa0a6', {metalness:0.6, roughness:0.35});
+[[-0.52,-0.28],[0.52,-0.28],[-0.52,0.28],[0.52,0.28]].forEach(([x,z])=>{ const l = new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.69,6), tLeg); l.position.set(x,0.345,z); table.add(l); });
+[-0.52,0.52].forEach(x=>{ const b = new THREE.Mesh(new THREE.CylinderGeometry(0.008,0.008,0.56,6), tLeg); b.rotation.x = Math.PI/2; b.position.set(x,0.2,0); table.add(b); });
+table.position.set(-0.15, 0, 2.35); tag(table,'table'); scene.add(table); campGear.push(table);
+
+// lantern on the table
+const lantern = new THREE.Group();
+const lBody = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.055,0.07,16), std('#2b2e31'));
+lBody.position.y = 0.035; lantern.add(lBody);
+const globeMat = std('#fff2d6', {emissive:new THREE.Color('#ffc46b'), emissiveIntensity:0.25, transparent:true, opacity:0.95});
+const globe = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.09,16), globeMat); globe.position.y = 0.115; lantern.add(globe);
+const lTop = new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.05,0.02,16), std('#2b2e31')); lTop.position.y = 0.17; lantern.add(lTop);
+const handle = new THREE.Mesh(new THREE.TorusGeometry(0.03,0.004,6,16,Math.PI), std('#2b2e31')); handle.position.y = 0.18; lantern.add(handle);
+lantern.position.set(0.18, 0.712, 2.4); tag(lantern,'lantern'); scene.add(lantern); campGear.push(lantern);
+const lanternLight = new THREE.PointLight('#ffb35c', 0, 7, 2); lanternLight.position.set(0.18, 0.86, 2.4); scene.add(lanternLight);
+const tentLight = new THREE.PointLight('#ffb866', 0, 3.5, 2); tentLight.position.set(0, 0.6, 0); scene.add(tentLight);
+
+// scale figure
+const fig = new THREE.Group();
+const skin = std('#c99a74'), shirt = std('#3c5a78'), pants = std('#2a2d33');
+const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.09,0.86,12), pants); legs.position.y = 0.43; fig.add(legs);
+const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.62,14), shirt); torso.position.y = 1.17; fig.add(torso);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.11,16,12), skin); head.scale.y = 1.15; head.position.y = 1.635; fig.add(head);
+fig.position.set(1.75, 0, 1.0); fig.rotation.y = -0.6; fig.visible = false; tag(fig,'person'); scene.add(fig);
+// height marker
+const markG = new THREE.BufferGeometry().setFromPoints([V(2.08,0,0.8),V(2.08,1.76,0.8), V(2.0,1.76,0.8),V(2.16,1.76,0.8), V(2.0,1.2,0.8),V(2.16,1.2,0.8)]);
+const marker = new THREE.LineSegments(markG, new THREE.LineBasicMaterial({color:'#c9721f'})); marker.visible = false; scene.add(marker);
+
+// ---------- door states ----------
+const S = {
+  closed:{p1:G1.clone(), p2:G2.clone(), poleL:0, poleR:0, ropeL:0, ropeR:0, pegC:0},
+  s1:{p1:V(-0.7,0.55,1.95), p2:V(0.7,0.55,1.95), poleL:0, poleR:0, ropeL:0, ropeR:0, pegC:0},
+  s2:{p1:V(-0.7,1.55,2.1), p2:V(0.7,0.62,1.95), poleL:1, poleR:0, ropeL:0, ropeR:0, pegC:0},
+  s3:{p1:V(-0.7,1.55,2.1), p2:V(0.7,0.62,1.95), poleL:1, poleR:0, ropeL:1, ropeR:0, pegC:0},
+  s4:{p1:V(-0.7,1.55,2.1), p2:V(0.75,0,1.8), poleL:1, poleR:0, ropeL:1, ropeR:0, pegC:1},
+  two:{p1:V(-0.7,1.55,2.1), p2:V(0.7,1.55,2.1), poleL:1, poleR:1, ropeL:1, ropeR:1, pegC:0}
+};
+const cur = {p1:S.s4.p1.clone(), p2:S.s4.p2.clone(), poleL:1, poleR:0, ropeL:1, ropeR:0, pegC:1};
+let target = S.s4;
+
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpP = new THREE.Vector3();
+function updateDoor(){
+  const p1 = cur.p1, p2 = cur.p2;
+  const open = Math.min(1, Math.max(0, ((p1.z+p2.z)/2 - 1.35)/0.6));
+  let k = 0;
+  for(let j=0;j<=SEG;j++){
+    const v = j/SEG;
+    for(let i=0;i<=SEG;i++){
+      const u = i/SEG;
+      tmpA.lerpVectors(H1, H2, u); tmpB.lerpVectors(p1, p2, u);
+      tmpP.lerpVectors(tmpA, tmpB, v);
+      tmpP.y -= 0.06*Math.sin(Math.PI*u)*Math.sin(Math.PI*v)*open;
+      tmpP.y = Math.max(tmpP.y, 0.004);
+      doorPos[k++] = tmpP.x; doorPos[k++] = tmpP.y; doorPos[k++] = tmpP.z;
+    }
+  }
+  doorGeo.attributes.position.needsUpdate = true; doorGeo.computeVertexNormals(); doorGeo.computeBoundingSphere();
+  eyeL.position.set(p1.x, p1.y+0.005, p1.z); eyeL.rotation.x = Math.PI/2;
+  eyeR.position.set(p2.x, p2.y+0.005, p2.z); eyeR.rotation.x = Math.PI/2;
+
+  setPole(poleL, p1, cur.poleL); setPole(poleR, p2, cur.poleR);
+  const top1 = V(p1.x, 1.6, p1.z), peg1 = V(p1.x-0.45, 0, p1.z+0.85);
+  const top2 = V(p2.x, 1.6, p2.z), peg2 = V(p2.x+0.45, 0, p2.z+0.85);
+  setRope(ropeL, top1, peg1, cur.ropeL, hitL); setRope(ropeR, top2, peg2, cur.ropeR, hitR);
+  pegL.position.copy(peg1); pegL.visible = cur.ropeL > 0.95;
+  pegR.position.copy(peg2); pegR.visible = cur.ropeR > 0.95;
+  pegCorner.position.set(p2.x, 0, p2.z); pegCorner.visible = cur.pegC > 0.5 && p2.y < 0.08;
+  ropeLink.visible = false;
+  const closedness = 1 - open;
+  pegD1.position.copy(G1); pegD2.position.copy(G2); pegD1.visible = pegD2.visible = closedness > 0.95;
+}
+function setPole(m, p, v){
+  const h = 1.6*v; m.visible = h > 0.02;
+  m.scale.y = Math.max(h, 0.001); m.position.set(p.x, h/2, p.z);
+  m.parent.userData.visible = m.visible;
+}
+function setRope(line, a, b, v, hit){
+  const arr = line.geometry.attributes.position.array;
+  const e = a.clone().lerp(b, v);
+  arr[0]=a.x; arr[1]=a.y; arr[2]=a.z; arr[3]=e.x; arr[4]=e.y; arr[5]=e.z;
+  line.geometry.attributes.position.needsUpdate = true; line.geometry.computeBoundingSphere();
+  line.visible = v > 0.01;
+  const dir = e.clone().sub(a), len = dir.length();
+  hit.parent.visible = line.visible && len > 0.05;
+  if(len > 0.05){ hit.scale.y = len; hit.position.copy(a).add(e).multiplyScalar(0.5); hit.quaternion.setFromUnitVectors(V(0,1,0), dir.normalize()); }
+}
+
+// ---------- UI ----------
+const NOTES = {
+  closed:"Door zipped and pegged down. Use this when it's windy or you're away from the tent.",
+  one:"With one pole you get a slanted half-awning: high on the pole side, pegged low on the other.",
+  two:"A second pole gives a level awning, with more room to sit underneath."
+};
+let mode = 'one', step = 4, playTimer = null;
+const stepsEl = document.getElementById('steps');
+function setMode(m){
+  mode = m; stopPlay();
+  document.querySelectorAll('.seg button[data-mode]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  document.getElementById('modenote').textContent = NOTES[m];
+  stepsEl.hidden = m !== 'one';
+  if(m === 'closed') target = S.closed;
+  else if(m === 'two') target = S.two;
+  else setStep(4);
+}
+function setStep(n){
+  step = n; target = S['s'+n];
+  document.querySelectorAll('.step').forEach(b=>{ if(+b.dataset.step === n) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current'); });
+}
+function stopPlay(){ if(playTimer){ clearInterval(playTimer); playTimer = null; document.getElementById('play').textContent = 'Play steps'; } }
+document.querySelectorAll('.seg button[data-mode]').forEach(b=>b.addEventListener('click', ()=>setMode(b.dataset.mode)));
+document.querySelectorAll('.step:not(.pstep)').forEach(b=>b.addEventListener('click', ()=>{ stopPlay(); setStep(+b.dataset.step); }));
+
+// ---------- pitching ----------
+const P = [
+  {sheet:0,inner:0,rise:0,poles:0,green:0,fly:0,pegs:0,gear:0},
+  {sheet:1,inner:1,rise:0,poles:0,green:0,fly:0,pegs:0,gear:0},
+  {sheet:1,inner:1,rise:1,poles:1,green:0,fly:0,pegs:0,gear:0},
+  {sheet:1,inner:1,rise:1,poles:1,green:1,fly:0,pegs:0,gear:0},
+  {sheet:1,inner:1,rise:1,poles:1,green:1,fly:1,pegs:0,gear:0},
+  {sheet:1,inner:1,rise:1,poles:1,green:1,fly:1,pegs:1,gear:0},
+  {sheet:1,inner:1,rise:1,poles:1,green:1,fly:1,pegs:1,gear:1}
+];
+const pcur = Object.assign({}, P[6]); let ptarget = P[6];
+let tab = 'door', pstep = 6, pTimer = null;
+function setPStep(n){
+  pstep = n; ptarget = P[n];
+  document.querySelectorAll('.pstep').forEach(b=>{ if(+b.dataset.step === n) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current'); });
+}
+function stopPPlay(){ if(pTimer){ clearInterval(pTimer); pTimer = null; document.getElementById('pplay').textContent = 'Play steps'; } }
+function setTab(t){
+  tab = t; stopPlay(); stopPPlay();
+  document.querySelectorAll('.seg button[data-tab]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.tab === t)));
+  document.getElementById('pitchsteps').hidden = t !== 'pitch';
+  document.getElementById('doorpanel').hidden = t !== 'door';
+  stepsEl.hidden = t !== 'door' || mode !== 'one';
+  if(t === 'pitch'){ target = S.closed; setPStep(1); }
+  else { setPStep(6); setMode(mode); }
+}
+document.querySelectorAll('.seg button[data-tab]').forEach(b=>b.addEventListener('click', ()=>setTab(b.dataset.tab)));
+document.querySelectorAll('.pstep').forEach(b=>b.addEventListener('click', ()=>{ stopPPlay(); setPStep(+b.dataset.step); }));
+document.getElementById('pplay').addEventListener('click', ()=>{
+  if(pTimer){ stopPPlay(); return; }
+  setPStep(0); let n = 0;
+  document.getElementById('pplay').textContent = 'Stop';
+  pTimer = setInterval(()=>{ n++; if(n > 6){ stopPPlay(); return; } setPStep(n); }, 1800);
+});
+function applyPitch(k){
+  for(const key in pcur) pcur[key] += (ptarget[key]-pcur[key])*k;
+  const sv = pcur.sheet; sheet.visible = sv > 0.02; sheet.scale.set(Math.max(sv,0.02), 1, 1); sheet.position.x = -1.075*(1-sv);
+  innerMesh.visible = pcur.inner > 0.02;
+  innerMesh.scale.y = INNER.y*Math.max(0.025, pcur.rise);
+  tentPoles.forEach(p=>{ p.visible = pcur.poles > 0.02; p.scale.y = Math.max(0.03, pcur.rise); p.position.y = 0; });
+  greenPole.visible = pcur.green > 0.02; greenPole.scale.set(1, Math.max(0.03, pcur.green), Math.max(0.2, pcur.green));
+  const fv = pcur.fly;
+  flyGroup.visible = doorGroup.visible = fv > 0.02;
+  flyGroup.position.y = doorGroup.position.y = (1-fv)*1.4;
+  cornerPegs.forEach(p=>p.visible = pcur.pegs > 0.5);
+  sleepGear.forEach(o=>o.visible = pcur.gear > 0.5);
+  campGear.forEach(o=>o.visible = pcur.gear > 0.5);
+  return fv;
+}
+document.getElementById('play').addEventListener('click', ()=>{
+  if(playTimer){ stopPlay(); return; }
+  target = S.closed; let n = 0;
+  document.querySelectorAll('.step').forEach(b=>b.removeAttribute('aria-current'));
+  document.getElementById('play').textContent = 'Stop';
+  playTimer = setInterval(()=>{ n++; if(n > 4){ stopPlay(); return; } setStep(n); }, 1700);
+});
+
+const tInside = document.getElementById('t-inside'), tNight = document.getElementById('t-night'), tPerson = document.getElementById('t-person');
+let insideT = 0, nightT = 0;
+tPerson.addEventListener('change', ()=>{ fig.visible = marker.visible = tPerson.checked; if(tPerson.checked) showInfo('person'); });
+
+const infoEl = document.getElementById('info');
+function showInfo(key){
+  const d = INFO[key]; if(!d) return;
+  document.getElementById('info-eyebrow').textContent = d.eyebrow;
+  document.getElementById('info-title').textContent = d.title;
+  document.getElementById('info-body').textContent = d.body;
+  document.getElementById('info-spec').innerHTML = d.spec;
+  infoEl.hidden = false; flash(key);
+}
+document.getElementById('info-close').addEventListener('click', ()=>{ infoEl.hidden = true; });
+document.querySelectorAll('.kit button').forEach(b=>b.addEventListener('click', ()=>showInfo(b.dataset.key)));
+
+// flash highlight
+let flashKey = null, flashT = 0;
+function flash(key){ flashKey = key; flashT = 1; }
+function containsMat(obj, mat){ let f = false; obj.traverse(m=>{ if(m.material === mat) f = true; }); return f; }
+function applyFlash(){
+  clickables.forEach(o=>{
+    const on = o.userData.key === flashKey && flashT > 0;
+    o.traverse(m=>{
+      if(!m.isMesh || !m.material || !m.material.emissive || m.material === globeMat || m.material === innerMat || m.material === stageMat) return;
+      if(m.userData.baseEm === undefined) m.userData.baseEm = m.material.emissiveIntensity || 0;
+      if(on){ m.material.emissive.setHex(0xf0a24a); m.material.emissiveIntensity = 0.55*flashT*(0.5+0.5*Math.sin(performance.now()/90)); m.material.userData.flashed = true; }
+      else if(m.material.userData.flashed && !(flashT > 0 && clickables.some(c=>c.userData.key===flashKey && c!==o && containsMat(c, m.material)))){ m.material.emissive.setHex(0x000000); m.material.emissiveIntensity = m.userData.baseEm; m.material.userData.flashed = false; }
+    });
+  });
+}
+
+// tap to inspect
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let downX = 0, downY = 0;
+canvas.addEventListener('pointerdown', e=>{ downX = e.clientX; downY = e.clientY; });
+canvas.addEventListener('pointerup', e=>{
+  if(Math.hypot(e.clientX-downX, e.clientY-downY) > 6) return;
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects(clickables.filter(o=>o.visible !== false), true).filter(h=>{ let o=h.object; while(o){ if(o.visible===false) return false; o=o.parent; } return true; });
+  if(!hits.length){ infoEl.hidden = true; return; }
+  let o = hits[0].object; while(o && !o.userData.key) o = o.parent;
+  if(insideT > 0.5 && o && (o.userData.key === 'tent' || o.userData.key === 'door')){
+    const deeper = hits.find(h=>{ let p=h.object; while(p && !p.userData.key) p=p.parent; return p && p.userData.key !== 'tent' && p.userData.key !== 'door'; });
+    if(deeper){ o = deeper.object; while(o && !o.userData.key) o = o.parent; }
+  }
+  if(o) showInfo(o.userData.key);
+  document.getElementById('hint').hidden = true;
+});
+
+// ---------- loop ----------
+const hud = document.querySelector('.hud');
+function applyOffset(){
+  const w = window.innerWidth, h = window.innerHeight;
+  const r = hud.getBoundingClientRect();
+  if(w < 720){ const dy = Math.round(Math.min(r.height, h*0.6)/2); camera.setViewOffset(w, h, 0, dy, w, h); }
+  else { const dx = Math.round((r.width + 16)/2); camera.setViewOffset(w, h, -dx, 0, w, h); }
+  camera.updateProjectionMatrix();
+}
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false); camera.aspect = w/h; applyOffset();
+}
+window.addEventListener('resize', resize); resize();
+if(window.ResizeObserver) new ResizeObserver(applyOffset).observe(hud);
+
+const bPan = document.getElementById('b-pan'), bPanel = document.getElementById('b-panel');
+bPan.addEventListener('click', ()=>{
+  const on = bPan.getAttribute('aria-pressed') !== 'true';
+  bPan.setAttribute('aria-pressed', String(on));
+  controls.mouseButtons.LEFT = on ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  controls.mouseButtons.RIGHT = on ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+  controls.touches.ONE = on ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+});
+document.getElementById('b-center').addEventListener('click', ()=>{ camera.position.copy(HOME.pos); controls.target.copy(HOME.target); controls.update(); });
+bPanel.addEventListener('click', ()=>{
+  const hide = !hud.classList.contains('collapsed');
+  hud.classList.toggle('collapsed', hide);
+  bPanel.setAttribute('aria-pressed', String(hide)); bPanel.textContent = hide ? 'Show panel' : 'Hide panel';
+  applyOffset();
+});
+
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const dayGround = new THREE.Color('#6f8c4b'), nightGround = new THREE.Color('#1c2a20');
+const dayTree = new THREE.Color('#2f4a2c'), nightTree = new THREE.Color('#0d1712');
+let last = performance.now();
+setMode('one');
+setTab('pitch'); setPStep(6);
+function tick(now){
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  const k = reduce ? 1 : 1 - Math.exp(-dt*4.5);
+  cur.p1.lerp(target.p1, k); cur.p2.lerp(target.p2, k);
+  ['poleL','poleR','ropeL','ropeR','pegC'].forEach(n=>{ cur[n] += (target[n]-cur[n])*k; });
+  updateDoor();
+  const fv = applyPitch(k);
+  if(pcur.pegs < 0.5){ pegD1.visible = pegD2.visible = false; }
+
+  insideT += ((tInside.checked?1:0) - insideT)*k;
+  const fade = Math.min(1, fv*1.4);
+  flyMat.opacity = doorMat.opacity = (1 - 0.82*insideT)*fade;
+  innerMat.opacity = 1 - 0.68*insideT;
+  flyMat.depthWrite = doorMat.depthWrite = insideT < 0.5 && fade > 0.99;
+  innerMat.depthWrite = insideT < 0.5;
+
+  nightT += ((tNight.checked?1:0) - nightT)*k;
+  scene.background.copy(DAY_SKY).lerp(NIGHT_SKY, nightT); scene.fog.color.copy(scene.background);
+  hemi.intensity = 0.85 - 0.72*nightT; sun.intensity = 1.0 - 0.86*nightT;
+  sun.color.set('#fff3df').lerp(new THREE.Color('#8aa3ff'), nightT);
+  groundMat.color.copy(dayGround).lerp(nightGround, nightT);
+  treeMat.color.copy(dayTree).lerp(nightTree, nightT);
+  lanternLight.intensity = 1.8*nightT; tentLight.intensity = 0.9*nightT*(cur.p1.y>0.3?1:0.8);
+  globeMat.emissiveIntensity = 0.25 + 2.2*nightT;
+  innerMat.emissiveIntensity = 0.28*nightT;
+  starMat.opacity = nightT;
+  stageMat.emissive.setHSL((now/6000)%1, 0.8, 0.5); stageMat.emissiveIntensity = 0.9*nightT;
+  beams.forEach((b,i)=>{ b.material.opacity = 0.16*nightT; b.rotation.z = Math.PI + Math.sin(now/900 + i*1.7)*0.35; });
+
+  if(flashT > 0){ flashT = Math.max(0, flashT - dt*0.7); }
+  applyFlash();
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+})();
+</script>
+
+</body></html>
