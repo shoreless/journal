@@ -1,0 +1,35 @@
+html, body { margin: 0; height: 100%; background: #0d130c; overflow: hidden; }
+body { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; color: #eef0e4; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+p, button { margin: 0; text-shadow: 0 1px 14px rgba(0, 0, 0, .6); }
+#line, #hint, #caption { position: fixed; pointer-events: none; opacity: 0; transition: opacity 2.6s ease; }
+
+#line {
+  left: 50%; bottom: 17%; transform: translateX(-50%);
+  width: min(30em, 84vw); text-align: center; text-wrap: balance;
+  font-size: clamp(1.15rem, 2.6vw, 1.7rem); font-style: italic; line-height: 1.4;
+}
+#hint {
+  left: 50%; bottom: 17%; transform: translateX(-50%);
+  font-size: .95rem; letter-spacing: .32em; text-transform: lowercase;
+}
+#caption { left: 22px; bottom: 18px; font-size: .92rem; font-style: italic; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+
+body.intro #line { opacity: .96; transition-delay: 1s; }
+body.hinting #hint { opacity: .75; }
+body.counting #caption { opacity: .72; }
+
+#sound {
+  position: fixed; right: 16px; bottom: 12px; padding: 6px 8px;
+  background: none; border: 0; color: inherit; font: inherit; font-size: .85rem; font-style: italic;
+  opacity: .5; cursor: pointer; transition: opacity .3s;
+}
+#sound:hover, #sound:focus-visible, #sound[aria-pressed="true"] { opacity: .9; }
+#sound:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; }
+
+#nogl { display: none; position: fixed; inset: 0; place-content: center; text-align: center; padding: 2em; font-style: italic; }
+body.no-gl #nogl { display: grid; }
+body.no-gl #view, body.no-gl #hint, body.no-gl #caption, body.no-gl #sound { display: none; }
+
+@media (prefers-reduced-motion: reduce) { #line, #hint, #caption { transition-duration: .01s; } }

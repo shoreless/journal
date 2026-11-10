@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0d130c">
+  <meta name="description" content="A childhood wish: to be reincarnated as a wall in a forest. Hold still and time passes.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d130c%27/%3E%3Cpath d=%27M4 22h9v-5h10v5h5M4 17h5v-5h10v5%27 fill=%27none%27 stroke=%27%2389a35a%27 stroke-width=%272%27/%3E%3C/svg%3E">
+  <title>A Wall in a Forest</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body class="intro">
+  <canvas id="view" aria-label="A mossy drystone wall running away through a forest. Nothing needs to be done; while you hold still, days, seasons and years pass."></canvas>
+  <p id="line">When I was a child, I wanted to be reincarnated as a wall in a forest.</p>
+  <p id="hint">hold still</p>
+  <p id="caption" aria-live="off"></p>
+  <button id="sound" aria-pressed="false">sound off</button>
+  <p id="nogl">This one needs WebGL, and this browser will not give it any.</p>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
