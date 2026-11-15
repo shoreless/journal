@@ -32,18 +32,19 @@ const flowers = [
   f.group.position.set(c.x, 0, c.z);
   f.group.rotation.y = Math.atan2(HOME.x * .4 - c.x, HOME.z - c.z);      // zips face the door
   f.win.value = Math.atan2(-Math.cos(f.group.rotation.y), Math.sin(f.group.rotation.y));     // which way the window is, from in there
+  f.lining = new THREE.Color(c.lining);
   f.front = new THREE.Vector3(Math.sin(f.group.rotation.y), 0, Math.cos(f.group.rotation.y));
   scene.add(f.group);
   return f;
 });
 
 // ---- where you are ----
-let state = 'room', cur = null, hover = null, zipTarget = ZTOP, insideT = 0, snugT = 0, time = 0;
+let state = 'room', cur = null, hover = null, zipTarget = ZTOP, insideT = 0, snugT = 0, time = 0, trans = null;
 const camPos = HOME.clone(), camLook = HOME_LOOK.clone(), look = { x: 0, y: 0, tx: 0, ty: 0 };
 let fov = 42;
 const sound = buildSound();
 const $ = id => document.getElementById(id);
-const hint = $('hint'), line = $('line'), back = $('back'), soundBtn = $('sound'), form = $('names'), said = $('said');
+const flash = $('flash'), hint = $('hint'), line = $('line'), back = $('back'), soundBtn = $('sound'), form = $('names'), said = $('said');
 const open = () => cur ? (ZTOP - cur.zip.value) / (ZTOP - ZBOT) : 0;
 
 function setState(s, f = cur) {
@@ -51,12 +52,15 @@ function setState(s, f = cur) {
   state = s; cur = s === 'room' ? null : f; if (cur) { cur.closing = false; zipTarget = cur.zip.value; }
   document.body.dataset.state = s; insideT = 0; snugT = 0;
 }
+// Going in or out is a step through somewhere the outside and the inside don't agree on size.
+function step(to) { if (!trans) { trans = { t: 0, to, done: false }; flash.style.background = '#' + cur.lining.getHexString(); } }
 function act() {            // a tap, or Enter
+  if (trans) return;
   if (state === 'room') { if (hover) setState('at', hover); }
-  else if (state === 'at') { if (open() > .7) setState('inside'); }
-  else if (open() > .7) setState('at');
+  else if (state === 'at') { if (open() > .7) step('inside'); }
+  else if (open() > .7) step('at');
 }
-function goBack() { if (state === 'inside') { if (open() > .7) setState('at'); else zipTarget = ZBOT; } else if (state === 'at') setState('room'); }
+function goBack() { if (trans) return; if (state === 'inside') { if (open() > .7) step('at'); else zipTarget = ZBOT; } else if (state === 'at') setState('room'); }
 
 function pick(x, y) {
   const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
@@ -67,7 +71,7 @@ function pick(x, y) {
     seg.set(a, b);
     // closest approach between the ray and the flower's axis
     const d = Math.sqrt(ray.ray.distanceSqToSegment(a, b, p1, p2)), dist = ray.ray.origin.distanceTo(p2);
-    if (d < .55 && dist < bd) { bd = dist; best = f; }
+    if (d < .45 && dist < bd) { bd = dist; best = f; }
   }
   return best;
 }
@@ -139,9 +143,23 @@ function tick(dt) {
   // camera
   const portrait = innerWidth < innerHeight;
   let wantFov = portrait ? 62 : 42;
+  const P = cur && cur.group.position, at = (d, y) => tmp.copy(P).addScaledVector(cur.front, d).setY(y).clone();
   if (state === 'room') { tmp.copy(HOME); if (portrait) tmp.z += 1.2; tmp2.copy(HOME_LOOK); }
-  else if (state === 'at') { tmp.copy(cur.group.position).addScaledVector(cur.front, portrait ? 3.1 : 2.7).setY(1.35); tmp2.copy(cur.group.position).setY(1.08); }
-  else { tmp.copy(cur.group.position).addScaledVector(cur.front, -.1).setY(.8); tmp2.copy(cur.group.position).addScaledVector(cur.front, 1).setY(.84); wantFov = portrait ? 86 : 72; }
+  else if (state === 'at') { tmp.copy(at(portrait ? 2.9 : 2.5, 1.2)); tmp2.copy(P).setY(.98); }
+  else { tmp.copy(at(-.3, 1.0)); tmp2.copy(at(1, 1.08)); wantFov = portrait ? 86 : 72; }
+  if (trans) {
+    trans.t += dt / 1.5;
+    if (trans.to === 'inside') { tmp.copy(at(.38, .9)); tmp2.copy(P).setY(.85); cur.stretch.value = Math.min(1, trans.t * 2.2) ** 2; }
+    else { tmp.copy(at(.75, 1.15)); tmp2.copy(at(2, 1.1)); }
+    if (trans.t >= .5 && !trans.done) {          // the moment nobody sees
+      trans.done = true; cur.stretch.value = 0;
+      const going = trans.to === 'inside';
+      cur.inn.value = going ? 1 : 0; setState(trans.to);
+      camPos.copy(going ? at(.35, 1.02) : at(.55, .92)); camLook.copy(going ? at(1.4, 1.1) : P.clone().setY(.9)); fov = going ? 60 : 50;
+    }
+    flash.style.opacity = Math.max(0, 1 - Math.abs(trans.t - .5) * 2.6);
+    if (trans.t >= 1) { trans = null; flash.style.opacity = 0; }
+  }
   camPos.lerp(tmp, k(.55)); camLook.lerp(tmp2, k(.45)); fov += (wantFov - fov) * k(.6);
   look.x += (look.tx - look.x) * k(.5); look.y += (look.ty - look.y) * k(.5);
   camera.position.copy(camPos); camera.fov = fov; camera.updateProjectionMatrix();
@@ -172,7 +190,7 @@ requestAnimationFrame(frame);
 
 window.weepies = {
   flowers, camera, scene, renderer, tick,
-  go(i) { setState('at', flowers[i]); }, zip(v) { zipTarget = ZTOP - v * (ZTOP - ZBOT); }, enter() { setState('inside'); }, home() { setState('room'); },
+  go(i) { setState('at', flowers[i]); }, zip(v) { zipTarget = ZTOP - v * (ZTOP - ZBOT); }, enter() { step('inside'); }, leave() { step('at'); }, home() { setState('room'); },
   run(seconds, dt = 1 / 30) { for (let t = 0; t < seconds; t += dt) tick(dt); return canvas.toDataURL('image/jpeg', .92); },
   get state() { return { state, open: open(), snug: cur ? cur.snug.value : 0, hint: hint.textContent, cls: document.body.className }; }
 };
